@@ -2,7 +2,7 @@
 
 # 应用信息
 APP_NAME = "临床助手"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 
 # DeepSeek API 配置
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
