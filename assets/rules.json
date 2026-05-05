@@ -1,0 +1,26 @@
+[
+  {
+    "id": "rule_critical_labs",
+    "title": "危急值处理原则",
+    "content": "所有危急值必须在汇报中优先标注，并给出处理建议。乳酸>4、pH<7.2或>7.6、K⁺>6.0或<2.5、离子钙<1.0 均为需立即处理的危急值。",
+    "category": "safety"
+  },
+  {
+    "id": "rule_renal_dosing",
+    "title": "肾功能调整剂量",
+    "content": "所有经肾排泄的药物必须根据eGFR调整剂量。eGFR<30时避免使用低分子肝素、二甲双胍等。",
+    "category": "treatment"
+  },
+  {
+    "id": "rule_daily_preview",
+    "title": "每日汇报前确认",
+    "content": "在生成每日汇报前，必须先列出关键识别信息让master核对：患者姓名缩写、数据日期、本次检查中的异常项。",
+    "category": "report"
+  },
+  {
+    "id": "rule_vte_assessment",
+    "title": "VTE评估",
+    "content": "所有ICU患者每日必须评估VTE风险。D-二聚体趋势、下肢彩超结果、物理预防措施必须在汇报中提及。",
+    "category": "safety"
+  }
+]
