@@ -152,7 +152,7 @@ for p in patients:
             </div>
             <div style="font-size:0.85rem;color:#555;margin-bottom:2px;">
                 🏷️ {p.get('primary_diagnosis','未填诊断')}
-                {f' | 🔪 {p.get(\"surgery_type\",\"\")}' if p.get('surgery_type') else ''}
+                {f' | 🔪 {p.get("surgery_type","")}' if p.get('surgery_type') else ''}
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -165,11 +165,11 @@ for p in patients:
         with col2:
             if st.button("📝 今日评估", key=f"assess_{p['id']}"):
                 st.session_state.current_patient_id = p['id']
-                st.switch_page("pages/2_今日评估.py")
+                st.switch_page("pages/2_daily_assessment.py")
         with col3:
             if st.button("📊 趋势", key=f"trend_{p['id']}"):
                 st.session_state.current_patient_id = p['id']
-                st.switch_page("pages/3_历史趋势.py")
+                st.switch_page("pages/3_history_trends.py")
         with col4:
             if st.button("🗑️ 删除", key=f"del_{p['id']}", type="secondary"):
                 if st.session_state.get(f"confirm_del_{p['id']}"):
