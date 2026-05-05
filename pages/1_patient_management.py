@@ -151,7 +151,7 @@ for p in patients:
                 <span style="font-size:0.8rem;color:#999;margin-left:auto;">入院：{p.get('admission_date','')}</span>
             </div>
             <div style="font-size:0.85rem;color:#555;margin-bottom:2px;">
-                🏷️ {p.get('primary_diagnosis','未填诊断')}
+                🏷️ {p.get('primary_diagnosis') or '未填诊断'}
                 {f' | 🔪 {p.get("surgery_type","")}' if p.get('surgery_type') else ''}
             </div>
         </div>
