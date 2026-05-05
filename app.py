@@ -75,16 +75,16 @@ st.subheader("快捷操作")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     if st.button("➕ 添加患者", use_container_width=True):
-        st.switch_page("pages/1_患者管理.py")
+        st.switch_page("pages/1_patient_management.py")
 with col2:
     if st.button("📝 今日评估", use_container_width=True):
-        st.switch_page("pages/2_今日评估.py")
+        st.switch_page("pages/2_daily_assessment.py")
 with col3:
     if st.button("🧮 医学工具箱", use_container_width=True):
-        st.switch_page("pages/6_工具箱.py")
+        st.switch_page("pages/6_toolbox.py")
 with col4:
     if st.button("🤖 AI 对话", use_container_width=True):
-        st.switch_page("pages/4_AI对话.py")
+        st.switch_page("pages/4_ai_chat.py")
 
 # 如果没有患者，提示添加
 if not patients:
