@@ -2,7 +2,7 @@
 
 import streamlit as st
 from datetime import date, timedelta
-from config import DIMENSIONS, CRITICAL_THRESHOLDS
+from config import DIMENSIONS
 import models.patient as patient_db
 import models.daily_card as card_db
 from core.calculator import calc_map, calc_oi, calc_balance, calc_postop_days, check_critical

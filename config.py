@@ -2,12 +2,12 @@
 
 # 应用信息
 APP_NAME = "临床助手"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 # DeepSeek API 配置
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_MODEL_FAST = "deepseek-v4-flash"
-DEEPSEEK_MODEL_PRO = "deepseek-v4-pro"
+DEEPSEEK_MODEL_FAST = "deepseek-chat"
+DEEPSEEK_MODEL_PRO = "deepseek-reasoner"
 DEEPSEEK_MAX_TOKENS = 4096
 
 # 数据库

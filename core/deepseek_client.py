@@ -27,8 +27,28 @@ def get_api_key() -> str | None:
     return decrypt(row["value"])
 
 
-def chat_stream(system_prompt: str, user_message: str, model: str = "deepseek-v4-flash"):
+def _get_setting(key: str, default: str = "") -> str:
+    """从数据库读取设置"""
+    conn = get_connection()
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def get_model_fast() -> str:
+    """获取快速模型名称"""
+    return _get_setting("model_fast", "deepseek-chat")
+
+
+def get_model_pro() -> str:
+    """获取推理模型名称"""
+    return _get_setting("model_pro", "deepseek-reasoner")
+
+
+def chat_stream(system_prompt: str, user_message: str, model: str = ""):
     """流式对话，逐段 yield 文本"""
+    if not model:
+        model = get_model_fast()
     client = get_client()
     if not client:
         yield "❌ 未配置 API Key，请在设置页面输入 DeepSeek API Key。"
@@ -51,8 +71,10 @@ def chat_stream(system_prompt: str, user_message: str, model: str = "deepseek-v4
         yield f"\n\n❌ API 调用失败：{str(e)}"
 
 
-def chat_sync(system_prompt: str, user_message: str, model: str = "deepseek-v4-pro") -> str:
+def chat_sync(system_prompt: str, user_message: str, model: str = "") -> str:
     """非流式对话，返回完整响应"""
+    if not model:
+        model = get_model_pro()
     client = get_client()
     if not client:
         return "❌ 未配置 API Key。"

@@ -1,6 +1,7 @@
 """历史趋势页面 — Plotly 多指标折线图"""
 
 import streamlit as st
+import re
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import date, timedelta
@@ -87,7 +88,6 @@ for key in selected_keys:
             rf = c.get("renal_func")
             val = None
             if rf:
-                import re
                 m = re.search(r"Cr[\s:：]*(\d+\.?\d*)", rf)
                 if m:
                     val = float(m.group(1))

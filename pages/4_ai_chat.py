@@ -44,7 +44,6 @@ if prompt := st.chat_input("输入医学问题..."):
 
     # 构建 system prompt
     from prompts.prompt_builder import build_system_prompt
-    from prompts.system_prompts import ROLE_PROMPT
 
     mode_instructions = {
         "command": "请以指令模式回复：直接、简洁，只给出核心答案和行动建议，不展开讨论。",

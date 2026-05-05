@@ -9,7 +9,7 @@ st.set_page_config(page_title="工具箱 - 临床助手", page_icon="🧮", layo
 st.title("🧮 医学工具箱")
 
 # 加载注册表
-registry_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "calc_registry.json")
+registry_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "calc_registry.json")
 with open(registry_path, "r", encoding="utf-8") as f:
     registry = json.load(f)
 
@@ -39,31 +39,6 @@ if st.session_state.calc_favorites:
                 if st.button(f"{calc['icon']} {calc['name']}", key=f"fav_{calc['id']}",
                              use_container_width=True):
                     st.session_state[f"open_calc_{calc['id']}"] = True
-
-# 分类展示
-if search:
-    # 搜索结果平铺
-    st.subheader(f"搜索结果（{len(filtered)} 个）")
-    for calc in filtered:
-        _render_calc_card(calc)
-else:
-    # 按分类折叠
-    for cat in categories:
-        cat_calcs = [c for c in filtered if c["cat"] == cat]
-        if not cat_calcs:
-            continue
-        cat_icons = {"急算": "🚨", "肾脏": "🫘", "评分": "📊", "营养": "🥗", "补液": "💧",
-                     "胰岛素": "💉", "配药": "💊", "TPN": "🧬", "产科": "🤰", "换算": "🔄"}
-        with st.expander(f"{cat_icons.get(cat, '🧮')} {cat}（{len(cat_calcs)}个）", expanded=False):
-            cols = st.columns(4)
-            for i, calc in enumerate(cat_calcs):
-                with cols[i % 4]:
-                    btn_label = f"{'⭐' if calc['id'] in st.session_state.calc_favorites else ''} {calc['icon']} {calc['name']}"
-                    if st.button(btn_label, key=f"calc_btn_{calc['id']}", use_container_width=True):
-                        st.session_state[f"open_calc_{calc['id']}"] = not st.session_state.get(
-                            f"open_calc_{calc['id']}", False
-                        )
-
 
 def _render_calc_card(calc):
     """渲染单个计算器卡片"""
@@ -128,6 +103,31 @@ def _render_calc_card(calc):
             st.success(f"**{result['main']}**")
             if result.get("detail"):
                 st.markdown(result["detail"], unsafe_allow_html=True)
+
+
+# 分类展示
+if search:
+    # 搜索结果平铺
+    st.subheader(f"搜索结果（{len(filtered)} 个）")
+    for calc in filtered:
+        _render_calc_card(calc)
+else:
+    # 按分类折叠
+    for cat in categories:
+        cat_calcs = [c for c in filtered if c["cat"] == cat]
+        if not cat_calcs:
+            continue
+        cat_icons = {"急算": "🚨", "肾脏": "🫘", "评分": "📊", "营养": "🥗", "补液": "💧",
+                     "胰岛素": "💉", "配药": "💊", "TPN": "🧬", "产科": "🤰", "换算": "🔄"}
+        with st.expander(f"{cat_icons.get(cat, '🧮')} {cat}（{len(cat_calcs)}个）", expanded=False):
+            cols = st.columns(4)
+            for i, calc in enumerate(cat_calcs):
+                with cols[i % 4]:
+                    btn_label = f"{'⭐' if calc['id'] in st.session_state.calc_favorites else ''} {calc['icon']} {calc['name']}"
+                    if st.button(btn_label, key=f"calc_btn_{calc['id']}", use_container_width=True):
+                        st.session_state[f"open_calc_{calc['id']}"] = not st.session_state.get(
+                            f"open_calc_{calc['id']}", False
+                        )
 
 
 def _run_calc(calc_id, values):

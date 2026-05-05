@@ -36,12 +36,12 @@ with tab1:
 
     model_fast = st.selectbox(
         "快速模型（病历生成、常规问答）",
-        ["deepseek-v4-flash", "deepseek-chat"],
+        ["deepseek-chat", "deepseek-reasoner"],
         index=0,
     )
     model_pro = st.selectbox(
         "推理模型（复杂鉴别诊断、矛盾分析）",
-        ["deepseek-v4-pro", "deepseek-reasoner"],
+        ["deepseek-reasoner", "deepseek-chat"],
         index=0,
     )
 

@@ -133,6 +133,30 @@ def init_database():
     conn.commit()
     conn.close()
     backup_database()
+    _seed_default_rules()
+
+
+def _seed_default_rules():
+    """首次运行时从 assets/rules.json 加载默认黄金规则"""
+    conn = get_connection()
+    count = conn.execute("SELECT COUNT(*) FROM rules").fetchone()[0]
+    if count > 0:
+        conn.close()
+        return
+    rules_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "rules.json")
+    if not os.path.exists(rules_path):
+        conn.close()
+        return
+    import json
+    with open(rules_path, "r", encoding="utf-8") as f:
+        rules = json.load(f)
+    for rule in rules:
+        conn.execute(
+            "INSERT INTO rules (id, title, content, category) VALUES (?, ?, ?, ?)",
+            (rule["id"], rule["title"], rule["content"], rule["category"]),
+        )
+    conn.commit()
+    conn.close()
 
 
 def backup_database():

@@ -1,6 +1,6 @@
 """临床自动计算：MAP、氧合指数、出入量平衡、术后日数"""
 
-from datetime import date, datetime
+from datetime import date
 
 
 def calc_map(sys_bp: float, dia_bp: float) -> float | None:

@@ -16,13 +16,13 @@ def _round(n, d=1):
 
 def abg(ph, pco2, hco3, na, cl, k, lac, alb):
     """血气分析"""
-    if not ph or not pco2 or not hco3:
+    if ph is None or pco2 is None or hco3 is None:
         return None
     ph, pco2, hco3 = float(ph), float(pco2), float(hco3)
-    na = float(na) if na else None
-    cl = float(cl) if cl else None
-    lac = float(lac) if lac else None
-    alb = float(alb) if alb else None
+    na = float(na) if na is not None else None
+    cl = float(cl) if cl is not None else None
+    lac = float(lac) if lac is not None else None
+    alb = float(alb) if alb is not None else None
 
     if ph < 7.35:
         state = "酸血症"
@@ -190,7 +190,7 @@ def hyperk(k):
     lines.append(f"{'6' if k >= 7.0 else '5'}. 排查原因（药物、肾功能、溶血等）")
     return {"main": f"K⁺ {k} mmol/L — {level}高钾血症",
             "detail": "<br>".join(lines),
-            "warn": level in ("危急", "严重")}
+            "warn": f"K⁺ {k} — {level}高钾血症，需紧急处理" if level in ("危急", "严重") else ""}
 
 
 def insulin_drip(glucose):
@@ -421,6 +421,8 @@ def hasbled(htn, renal, stroke, bleed, labile, elderly, drug):
 
 def cha2ds2_vasc(chf, htn, age, dm, stroke, vasc, female):
     """CHA₂DS₂-VASc"""
+    if age is None:
+        return None
     score = 0
     if chf: score += 1
     if htn: score += 1

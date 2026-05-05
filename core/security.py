@@ -1,7 +1,6 @@
 """API Key 加密存储"""
 
 import base64
-import os
 import socket
 import getpass
 from cryptography.fernet import Fernet
