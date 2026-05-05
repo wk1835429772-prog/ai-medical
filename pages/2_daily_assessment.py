@@ -109,7 +109,6 @@ with left_col:
                                 key=field_key,
                                 placeholder="未填",
                             )
-                            st.session_state[field_key] = val
                             show_critical(f["key"], val)
                         else:
                             val = st.text_input(
@@ -118,7 +117,6 @@ with left_col:
                                 key=field_key,
                                 placeholder="未填",
                             )
-                            st.session_state[field_key] = val
 
             # 昨日结果
             if dim["yesterday_fields"]:
@@ -138,7 +136,6 @@ with left_col:
                                 key=field_key,
                                 placeholder="未填",
                             )
-                            st.session_state[field_key] = val
                             show_critical(f["key"], val)
                         else:
                             val = st.text_input(
