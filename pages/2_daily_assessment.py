@@ -8,6 +8,8 @@ import models.daily_card as card_db
 from core.calculator import calc_map, calc_oi, calc_balance, calc_postop_days, check_critical
 
 st.set_page_config(page_title="今日评估 - 临床助手", page_icon="📝", layout="wide")
+from core.ui_style import inject_global_css
+inject_global_css()
 
 st.title("📝 今日评估")
 
@@ -144,8 +146,6 @@ with left_col:
                                 key=field_key,
                                 placeholder="未填",
                             )
-                            st.session_state[field_key] = val
-
     # 自动计算显示
     st.divider()
     st.subheader("🔢 自动计算")
@@ -170,7 +170,7 @@ with left_col:
         st.metric("氧合指数", f"{oi_val}" if oi_val else "—",
                   delta="需FiO₂" if pao2 and not fio2 else None)
     with col3:
-        bal_display = f"{balance_val:+.0f} mL" if balance_val else "—"
+        bal_display = f"{balance_val:+.0f} mL" if balance_val is not None else "—"
         st.metric("出入量平衡", bal_display)
 
 with right_col:
@@ -179,7 +179,7 @@ with right_col:
     # 模型选择
     report_model = st.radio(
         "模型",
-        ["deepseek-v4-flash", "deepseek-v4-pro"],
+        ["deepseek-chat", "deepseek-reasoner"],
         horizontal=True,
         index=0,
     )

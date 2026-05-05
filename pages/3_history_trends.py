@@ -10,6 +10,8 @@ import models.patient as patient_db
 import models.daily_card as card_db
 
 st.set_page_config(page_title="历史趋势 - 临床助手", page_icon="📊", layout="wide")
+from core.ui_style import inject_global_css
+inject_global_css()
 st.title("📊 历史趋势")
 
 # 患者选择

@@ -6,6 +6,8 @@ import models.patient as patient_db
 from core.calculator import calc_postop_days
 
 st.set_page_config(page_title="患者管理 - 临床助手", page_icon="🏥", layout="wide")
+from core.ui_style import inject_global_css
+inject_global_css()
 st.title("👥 患者管理")
 
 # --- 搜索栏 ---

@@ -116,7 +116,7 @@ def abg(ph, pco2, hco3, na, cl, k, lac, alb):
 
 def nadeficit(na, wt, sex):
     """低钠补钠"""
-    if not na or not wt:
+    if na is None or wt is None:
         return None
     na, wt = float(na), float(wt)
     factor = 0.5 if sex == "女" else 0.6
@@ -127,11 +127,11 @@ def nadeficit(na, wt, sex):
 
 def pumprate(drug, dose_mg, vol_ml, wt, target):
     """泵速计算"""
-    if not dose_mg or not vol_ml or not wt:
+    if dose_mg is None or vol_ml is None or wt is None:
         return None
     dose_mg, vol_ml, wt = float(dose_mg), float(vol_ml), float(wt)
     conc = dose_mg / vol_ml
-    if not target:
+    if target is None:
         return {"main": f"浓度 = {_round(conc, 2)} mg/mL",
                 "detail": f"配法: {dose_mg}mg + NS 至 {vol_ml}mL"}
     target = float(target)
@@ -143,7 +143,7 @@ def pumprate(drug, dose_mg, vol_ml, wt, target):
 
 def lactate_clearance(lac1, lac2):
     """乳酸清除率"""
-    if not lac1 or not lac2:
+    if lac1 is None or lac2 is None:
         return None
     lac1, lac2 = float(lac1), float(lac2)
     clearance = _round((lac1 - lac2) / lac1 * 100)
@@ -154,7 +154,7 @@ def lactate_clearance(lac1, lac2):
 
 def map_calc(sbp, dbp):
     """平均动脉压"""
-    if not sbp or not dbp:
+    if sbp is None or dbp is None:
         return None
     sbp, dbp = float(sbp), float(dbp)
     map_val = round((sbp + 2 * dbp) / 3)
@@ -164,7 +164,7 @@ def map_calc(sbp, dbp):
 
 def hyperk(k):
     """高钾处理"""
-    if not k:
+    if k is None:
         return None
     k = float(k)
     lines = []
@@ -195,7 +195,7 @@ def hyperk(k):
 
 def insulin_drip(glucose):
     """胰岛素泵速"""
-    if not glucose:
+    if glucose is None:
         return None
     glucose = float(glucose)
     if glucose > 20:
@@ -212,7 +212,7 @@ def insulin_drip(glucose):
 
 def corrected_ca(ca, alb):
     """校正钙"""
-    if not ca or not alb:
+    if ca is None or alb is None:
         return None
     ca, alb = float(ca), float(alb)
     corrected = _round(ca + 0.02 * (40 - alb), 2)
@@ -221,7 +221,7 @@ def corrected_ca(ca, alb):
 
 def na_correction(na, glu):
     """校正钠(血糖)"""
-    if not na or not glu:
+    if na is None or glu is None:
         return None
     na, glu = float(na), float(glu)
     corrected = _round(na + 0.024 * (glu - 5.5), 1)
@@ -230,7 +230,7 @@ def na_correction(na, glu):
 
 def dka_fluids(wt, degree, glucose, k):
     """DKA/HHS补液"""
-    if not wt or not degree:
+    if wt is None or degree is None:
         return None
     wt, degree = float(wt), float(degree)
     total = round(wt * degree * 1000)
@@ -253,7 +253,7 @@ def dka_fluids(wt, degree, glucose, k):
 
 def egfr(cr, age, sex):
     """eGFR CKD-EPI"""
-    if not cr or not age:
+    if cr is None or age is None:
         return None
     cr, age = float(cr), float(age)
     scr = cr / 88.4
@@ -271,7 +271,7 @@ def egfr(cr, age, sex):
 
 def cockcroft_gault(age, wt, cr, sex):
     """Cockcroft-Gault 肌酐清除率"""
-    if not age or not wt or not cr:
+    if age is None or wt is None or cr is None:
         return None
     age, wt, cr = float(age), float(wt), float(cr)
     cr_mg = cr / 88.4
@@ -284,7 +284,7 @@ def cockcroft_gault(age, wt, cr, sex):
 
 def kdeficit(k, wt):
     """补钾"""
-    if not k or not wt:
+    if k is None or wt is None:
         return None
     k, wt = float(k), float(wt)
     deficit = round((3.5 - k) / 0.3 * 100)
@@ -301,7 +301,7 @@ def kdeficit(k, wt):
 
 def anion_gap(na, cl, hco3):
     """阴离子间隙"""
-    if not na or not cl or not hco3:
+    if na is None or cl is None or hco3 is None:
         return None
     ag = _round(float(na) - (float(cl) + float(hco3)))
     interp = "升高 ⬆️ 高AG代酸" if ag > 12 else "正常（12±4）" if ag >= 8 else "偏低"
@@ -310,7 +310,7 @@ def anion_gap(na, cl, hco3):
 
 def osmgap(na, glu, bun, osm):
     """渗透压间隙"""
-    if not na or not glu or not bun or not osm:
+    if na is None or glu is None or bun is None or osm is None:
         return None
     calc_osm = 2 * float(na) + float(glu) / 18 + float(bun) / 2.8
     gap = _round(float(osm) - calc_osm)
@@ -320,7 +320,7 @@ def osmgap(na, glu, bun, osm):
 
 def schwartz(ht, cr):
     """Schwartz公式(儿童eGFR)"""
-    if not ht or not cr:
+    if ht is None or cr is None:
         return None
     egfr_val = _round(36.5 * float(ht) / float(cr), 1)
     return {"main": f"eGFR = {egfr_val} mL/min/1.73m²", "detail": "Schwartz公式(经典系数36.5)"}
@@ -442,7 +442,7 @@ def cha2ds2_vasc(chf, htn, age, dm, stroke, vasc, female):
 
 def child_pugh(bili, alb, inr, ascites, enceph):
     """Child-Pugh"""
-    if not bili or not alb or not inr:
+    if bili is None or alb is None or inr is None:
         return None
     bili, alb, inr = float(bili), float(alb), float(inr)
     score = 0
@@ -471,7 +471,7 @@ def apgar(appearance, pulse, grimace, activity, respiration):
 
 def bmi(ht, wt):
     """BMI"""
-    if not ht or not wt:
+    if ht is None or wt is None:
         return None
     ht, wt = float(ht), float(wt)
     bmi_val = _round(wt / (ht / 100) ** 2)
@@ -483,7 +483,7 @@ def bmi(ht, wt):
 
 def bsa(ht, wt):
     """体表面积"""
-    if not ht or not wt:
+    if ht is None or wt is None:
         return None
     ht, wt = float(ht), float(wt)
     dubois = _round(0.007184 * ht ** 0.725 * wt ** 0.725, 2)
@@ -493,7 +493,7 @@ def bsa(ht, wt):
 
 def bmr_tdee(age, wt, ht, sex, act):
     """BMR/TDEE"""
-    if not age or not wt or not ht:
+    if age is None or wt is None or ht is None:
         return None
     age, wt, ht = float(age), float(wt), float(ht)
     act = float(act) if act else 1.2
@@ -507,7 +507,7 @@ def bmr_tdee(age, wt, ht, sex, act):
 
 def whr(waist, hip):
     """腰臀比"""
-    if not waist or not hip:
+    if waist is None or hip is None:
         return None
     ratio = _round(float(waist) / float(hip), 2)
     return {"main": f"WHR = {ratio}"}
@@ -519,7 +519,7 @@ def whr(waist, hip):
 
 def maintenance_fluid(wt):
     """维持液量 4-2-1"""
-    if not wt:
+    if wt is None:
         return None
     wt = float(wt)
     if wt <= 10:
@@ -534,7 +534,7 @@ def maintenance_fluid(wt):
 
 def parkland(wt, tbsa):
     """Parkland烧伤补液"""
-    if not wt or not tbsa:
+    if wt is None or tbsa is None:
         return None
     wt, tbsa = float(wt), float(tbsa)
     total = 4 * wt * tbsa
@@ -546,7 +546,7 @@ def parkland(wt, tbsa):
 
 def dehydration_correction(wt, na, rate_mode):
     """脱水补液"""
-    if not wt or not na:
+    if wt is None or na is None:
         return None
     wt, na = float(wt), float(na)
     deficit = _round(wt * 0.6 * (na / 140 - 1), 2)
@@ -565,7 +565,7 @@ def dehydration_correction(wt, na, rate_mode):
 
 def insulin_tdd(dm_type, wt):
     """胰岛素TDD"""
-    if not wt:
+    if wt is None:
         return None
     wt = float(wt)
     lo = 0.3 if dm_type == 1 else 0.2
@@ -576,7 +576,7 @@ def insulin_tdd(dm_type, wt):
 
 def isf(tdd):
     """胰岛素敏感系数"""
-    if not tdd:
+    if tdd is None:
         return None
     tdd = float(tdd)
     return {"main": f"ISF = {_round(100/tdd, 1)} mmol/L/U", "detail": f"100法则"}
@@ -584,7 +584,7 @@ def isf(tdd):
 
 def icr(tdd):
     """胰岛素碳水比"""
-    if not tdd:
+    if tdd is None:
         return None
     tdd = float(tdd)
     return {"main": f"ICR = {_round(28/tdd, 1)} g碳水/U", "detail": "500/28法则"}
@@ -592,7 +592,7 @@ def icr(tdd):
 
 def iv_insulin(wt, glucose):
     """静脉胰岛素泵速"""
-    if not wt:
+    if wt is None:
         return None
     wt = float(wt)
     rate = _round(wt * 0.1, 1) if glucose is None else _round(wt * 0.1, 1)
@@ -605,7 +605,7 @@ def iv_insulin(wt, glucose):
 
 def dopamine_prep(wt):
     """多巴胺配法"""
-    if not wt:
+    if wt is None:
         return None
     dose = round(float(wt) * 3)
     return {"main": f"{dose}mg + NS 至 50mL", "detail": f"1mL/h = 1μg/kg/min<br>体重{wt}kg × 3"}
@@ -613,7 +613,7 @@ def dopamine_prep(wt):
 
 def norepi_prep(wt):
     """去甲肾配法"""
-    if not wt:
+    if wt is None:
         return None
     wt = float(wt)
     return {"main": f"{_round(wt*0.3,1)}mg + NS 至 50mL",
@@ -622,7 +622,7 @@ def norepi_prep(wt):
 
 def dex_conversion(dose, route):
     """地塞米松换算"""
-    if not dose:
+    if dose is None:
         return None
     dose = float(dose)
     eq = dose * 5 if route == "iv" else dose * 0.75
@@ -632,7 +632,7 @@ def dex_conversion(dose, route):
 
 def peds_dose(wt, mg_per_kg, freq):
     """儿科药物剂量"""
-    if not wt or not mg_per_kg:
+    if wt is None or mg_per_kg is None:
         return None
     wt, mg_per_kg = float(wt), float(mg_per_kg)
     dose = _round(wt * mg_per_kg, 1)
@@ -644,7 +644,7 @@ def peds_dose(wt, mg_per_kg, freq):
 
 def dilution(c1, c2, v2, v1):
     """稀释计算器 C1V1=C2V2"""
-    if not c1 or not c2:
+    if c1 is None or c2 is None:
         return None
     c1, c2 = float(c1), float(c2)
     if v2:
@@ -658,14 +658,14 @@ def dilution(c1, c2, v2, v1):
 
 def solution_conc(mass, vol):
     """溶液浓度"""
-    if not mass or not vol:
+    if mass is None or vol is None:
         return None
     return {"main": f"{_round(float(mass)/float(vol), 2)} mg/mL", "detail": f"{mass}mg / {vol}mL"}
 
 
 def kcl_check(amount, total_vol):
     """KCl浓度检查"""
-    if not amount or not total_vol:
+    if amount is None or total_vol is None:
         return None
     amount, total_vol = float(amount), float(total_vol)
     pct = _round(amount / total_vol * 100, 2)
@@ -677,7 +677,7 @@ def kcl_check(amount, total_vol):
 
 def insulin_prep(wt):
     """胰岛素配制"""
-    if not wt:
+    if wt is None:
         return None
     wt = float(wt)
     return {"main": "RI 50U + NS 49.5mL (1U/mL)", "detail": f"起始 0.1U/kg/h = {_round(wt*0.1,2)} mL/h"}
@@ -689,7 +689,7 @@ def insulin_prep(wt):
 
 def tpn_protein(wt, g_per_kg):
     """TPN蛋白量"""
-    if not wt:
+    if wt is None:
         return None
     wt = float(wt)
     g_per_kg = float(g_per_kg) if g_per_kg else 1.2
@@ -700,7 +700,7 @@ def tpn_protein(wt, g_per_kg):
 
 def tpn_energy(wt, kcal_per_kg):
     """TPN能量"""
-    if not wt:
+    if wt is None:
         return None
     total = round(float(wt) * float(kcal_per_kg or 25))
     return {"main": f"{total} kcal/d", "detail": f"{kcal_per_kg or 25} kcal/kg × {wt}kg"}
@@ -708,7 +708,7 @@ def tpn_energy(wt, kcal_per_kg):
 
 def tpn_macro(total_kcal, carb_pct, fat_pct, prot_pct):
     """TPN宏量营养素"""
-    if not total_kcal:
+    if total_kcal is None:
         return None
     total_kcal = float(total_kcal)
     carb_pct = float(carb_pct or 60)
@@ -725,7 +725,7 @@ def tpn_macro(total_kcal, carb_pct, fat_pct, prot_pct):
 
 def tpn_glucose_rate(gluc_g, wt):
     """TPN糖速"""
-    if not gluc_g or not wt:
+    if gluc_g is None or wt is None:
         return None
     gluc_g, wt = float(gluc_g), float(wt)
     rate = _round(gluc_g * 1000 / (wt * 1440), 2)
@@ -736,7 +736,7 @@ def tpn_glucose_rate(gluc_g, wt):
 
 def tn_ratio(np_cal, aa_g):
     """热氮比"""
-    if not np_cal or not aa_g:
+    if np_cal is None or aa_g is None:
         return None
     np_cal, aa_g = float(np_cal), float(aa_g)
     n2 = aa_g * 0.16
@@ -754,7 +754,7 @@ def tpn_osm(g_vol, f_vol, a_vol, o_vol):
     a_vol = float(a_vol or 0)
     o_vol = float(o_vol or 0)
     total = g_vol + f_vol + a_vol + o_vol
-    if not total:
+    if total is None:
         return None
     osm = round((g_vol * 2500 + f_vol * 350 + a_vol * 800 + o_vol * 300) / total)
     return {"main": f"总量{total}mL 渗透压≈{osm}mOsm/L",
@@ -767,7 +767,7 @@ def tpn_osm(g_vol, f_vol, a_vol, o_vol):
 
 def edd(lmp_str):
     """预产期"""
-    if not lmp_str:
+    if lmp_str is None:
         return None
     from datetime import date, timedelta
     try:
@@ -783,7 +783,7 @@ def edd(lmp_str):
 
 def fetal_weight(bpd, hc, ac, fl):
     """胎儿体重(Hadlock)"""
-    if not bpd or not hc or not ac or not fl:
+    if bpd is None or hc is None or ac is None or fl is None:
         return None
     bpd, hc, ac, fl = float(bpd), float(hc), float(ac), float(fl)
     efw = round(10 ** (1.3596 + 0.0064 * hc + 0.0424 * ac + 0.174 * fl + 0.00061 * bpd * ac - 0.00386 * ac * fl) / 1000, 2)
@@ -796,7 +796,7 @@ def fetal_weight(bpd, hc, ac, fl):
 
 def glucose_convert(val, direction):
     """血糖换算 mmol/L ↔ mg/dL"""
-    if not val:
+    if val is None:
         return None
     val = float(val)
     if direction == "to_mg":
@@ -806,7 +806,7 @@ def glucose_convert(val, direction):
 
 def creatinine_convert(val, direction):
     """肌酐换算 μmol/L ↔ mg/dL"""
-    if not val:
+    if val is None:
         return None
     val = float(val)
     if direction == "to_mg":
@@ -816,7 +816,7 @@ def creatinine_convert(val, direction):
 
 def calcium_convert(val, direction):
     """钙换算 mmol/L ↔ mg/dL"""
-    if not val:
+    if val is None:
         return None
     val = float(val)
     if direction == "to_mg":
@@ -826,7 +826,7 @@ def calcium_convert(val, direction):
 
 def magnesium_convert(val, direction):
     """镁换算 mmol/L ↔ mg/dL"""
-    if not val:
+    if val is None:
         return None
     val = float(val)
     if direction == "to_mg":
@@ -836,7 +836,7 @@ def magnesium_convert(val, direction):
 
 def bilirubin_convert(val, direction):
     """胆红素换算 μmol/L ↔ mg/dL"""
-    if not val:
+    if val is None:
         return None
     val = float(val)
     if direction == "to_mg":
@@ -846,7 +846,7 @@ def bilirubin_convert(val, direction):
 
 def cholesterol_convert(val, direction):
     """胆固醇换算 mmol/L ↔ mg/dL"""
-    if not val:
+    if val is None:
         return None
     val = float(val)
     if direction == "to_mg":
@@ -856,7 +856,7 @@ def cholesterol_convert(val, direction):
 
 def triglyceride_convert(val, direction):
     """甘油三酯换算 mmol/L ↔ mg/dL"""
-    if not val:
+    if val is None:
         return None
     val = float(val)
     if direction == "to_mg":
@@ -866,7 +866,7 @@ def triglyceride_convert(val, direction):
 
 def pressure_convert(val, direction):
     """血压换算 mmHg ↔ kPa"""
-    if not val:
+    if val is None:
         return None
     val = float(val)
     if direction == "to_kpa":
@@ -876,7 +876,7 @@ def pressure_convert(val, direction):
 
 def temperature_convert(val, direction):
     """体温换算 °C ↔ °F"""
-    if not val:
+    if val is None:
         return None
     val = float(val)
     if direction == "to_f":

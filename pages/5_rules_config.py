@@ -4,6 +4,8 @@ import streamlit as st
 import uuid
 
 st.set_page_config(page_title="规则配置 - 临床助手", page_icon="⚙️", layout="wide")
+from core.ui_style import inject_global_css
+inject_global_css()
 st.title("⚙️ 设置")
 
 tab1, tab2, tab3 = st.tabs(["🔑 API 配置", "📋 黄金规则", "📜 系统提示词"])

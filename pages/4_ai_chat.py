@@ -4,6 +4,8 @@ import streamlit as st
 from config import TEACHING_MODES
 
 st.set_page_config(page_title="AI对话 - 临床助手", page_icon="🤖", layout="wide")
+from core.ui_style import inject_global_css
+inject_global_css()
 st.title("🤖 AI 对话")
 
 # 侧边配置
@@ -20,7 +22,7 @@ with st.sidebar:
 
     model = st.radio(
         "模型",
-        ["deepseek-v4-flash", "deepseek-v4-pro"],
+        ["deepseek-chat", "deepseek-reasoner"],
         horizontal=True,
         index=0,
     )
