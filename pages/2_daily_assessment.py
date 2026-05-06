@@ -261,6 +261,13 @@ with left_col:
                         with cols[i % min(4, max(1, len(fields)))]:
                             current_val = daily_card.get(f["key"])
                             render_field_input(dim["key"], f, current_val)
+                    # 内联 OI 计算（血气分析组之后）
+                    if dim["key"] == "respiration" and group.get("label") == "血气分析":
+                        pao2_val = get_field_val("abg_pao2")
+                        fio2_val = get_field_val("vent_fio2")
+                        oi = calc_oi(pao2_val, fio2_val)
+                        if oi is not None:
+                            st.caption(f"↳ 氧合指数 OI = **{oi}**")
 
             # 昨日结果
             if dim["yesterday_fields"]:
