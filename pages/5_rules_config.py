@@ -156,7 +156,7 @@ with tab2:
                     st.rerun()
 
 # --- Tab 3: 参考范围 ---
-with tab4:
+with tab3:
     st.subheader("临床参考范围设置")
     st.caption("调整各指标的正常值范围，将影响历史趋势页面的颜色标注。修改后自动保存到本地数据库。")
 
@@ -329,7 +329,7 @@ with tab4:
 
 
 # --- Tab 4: 系统提示词预览 ---
-with tab3:
+with tab4:
     st.subheader("系统提示词预览")
     from prompts.prompt_builder import build_system_prompt
     full_prompt = build_system_prompt(include_rules=True)

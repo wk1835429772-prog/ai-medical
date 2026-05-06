@@ -1,7 +1,8 @@
-"""AI 对话页面 — DeepSeek 风格：左侧对话列表 + 右侧聊天"""
+"""AI 对话页面 — DeepSeek 风格：左侧对话列表 + 右侧聊天 + 语音/图片"""
 
 import streamlit as st
 import base64
+import io
 
 from core.database import init_database
 init_database()
@@ -16,6 +17,48 @@ inject_global_css()
 # ─── Session state ───
 if "ai_current_conv" not in st.session_state:
     st.session_state.ai_current_conv = None
+if "_ai_voice_counter" not in st.session_state:
+    st.session_state._ai_voice_counter = 0
+if "_ai_voice_transcript" not in st.session_state:
+    st.session_state._ai_voice_transcript = ""
+
+# ─── 处理语音识别（在 widget 渲染前） ───
+voice_key = f"ai_voice_{st.session_state._ai_voice_counter}"
+audio_rec = st.session_state.get(voice_key)
+if audio_rec and not st.session_state._ai_voice_transcript:
+    with st.spinner("识别语音..."):
+        try:
+            import speech_recognition as sr
+            from pydub import AudioSegment
+            recognizer = sr.Recognizer()
+            audio_bytes = audio_rec.getvalue()
+            try:
+                audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
+            except Exception:
+                audio_segment = AudioSegment.from_wav(io.BytesIO(audio_bytes))
+            wav_buffer = io.BytesIO()
+            audio_segment.export(wav_buffer, format="wav")
+            wav_buffer.seek(0)
+            with sr.AudioFile(wav_buffer) as source:
+                audio_data = recognizer.record(source)
+            text = recognizer.recognize_google(audio_data, language="zh-CN")
+            st.session_state._ai_voice_transcript = text
+            st.session_state._ai_voice_counter += 1
+            st.rerun()
+        except ImportError:
+            st.error("语音识别依赖未安装：pip install SpeechRecognition pydub")
+        except sr.UnknownValueError:
+            st.warning("无法识别语音内容，请重试")
+            st.session_state._ai_voice_counter += 1
+            st.rerun()
+        except sr.RequestError as e:
+            st.error(f"语音识别服务不可用：{e}")
+            st.session_state._ai_voice_counter += 1
+            st.rerun()
+        except Exception as e:
+            st.error(f"音频处理失败：{e}")
+            st.session_state._ai_voice_counter += 1
+            st.rerun()
 
 # ══════════════════════════════════════════════
 # 左侧边栏：对话列表
@@ -23,7 +66,6 @@ if "ai_current_conv" not in st.session_state:
 with st.sidebar:
     st.markdown("### 💬 AI 对话")
 
-    # 通用模式（无患者绑定）
     convs = chat_db.get_conversations("general")
 
     with st.expander("📜 历史对话", expanded=True):
@@ -51,7 +93,6 @@ with st.sidebar:
 
     st.divider()
 
-    # 教学模式
     teaching_mode = st.select_slider(
         "教学深度",
         options=list(TEACHING_MODES.keys()),
@@ -60,7 +101,6 @@ with st.sidebar:
     )
     st.caption(TEACHING_MODES[teaching_mode]["description"])
 
-    # 模型选择
     model = st.radio(
         "模型",
         ["deepseek-v4-flash", "deepseek-v4-pro"],
@@ -72,7 +112,6 @@ with st.sidebar:
 # 主区域
 # ══════════════════════════════════════════════
 
-# 顶栏：标题 + 新对话按钮
 hdr1, hdr2 = st.columns([6, 1])
 with hdr1:
     st.markdown("## 🤖 AI 对话")
@@ -85,7 +124,7 @@ st.divider()
 
 conv_id = st.session_state.ai_current_conv
 
-# 消息历史
+# ─── 消息历史 ───
 if conv_id:
     messages = chat_db.get_messages("general", conv_id)
     for msg in messages:
@@ -97,40 +136,60 @@ if conv_id:
                     pass
             if msg.get("content"):
                 st.markdown(msg["content"])
-# 底部输入区
+
+# ══════════════════════════════════════════════
+# 底部：输入区（对话框 + 语音/图片按钮）
+# ══════════════════════════════════════════════
 st.divider()
 
-# 图片 + 语音上传（小图标风格）
-upload_c1, upload_c2 = st.columns(2)
-with upload_c1:
-    uploaded_img = st.file_uploader("📷 图片", type=["jpg", "jpeg", "png", "webp"],
-                                     key="ai_img")
-with upload_c2:
-    audio_bytes = None
-    try:
-        audio_rec = st.audio_input("🎤 语音", key="ai_voice")
-        if audio_rec:
-            audio_bytes = audio_rec.getvalue()
-    except AttributeError:
-        audio_file = st.file_uploader("🎤 语音", type=["wav", "mp3", "m4a"],
-                                       key="ai_audio")
-        if audio_file:
-            audio_bytes = audio_file.getvalue()
+# 图片预览
+if st.session_state.get("_ai_image"):
+    st.image(base64.b64decode(st.session_state._ai_image), width=150, caption="待发送图片")
+    if st.button("❌ 移除图片"):
+        st.session_state._ai_image = ""
+        st.rerun()
 
-if uploaded_img:
-    st.caption(f"📷 已选择：{uploaded_img.name}")
+# 对话输入框
+prompt = st.chat_input("输入医学问题...")
 
-# 聊天输入
-if prompt := st.chat_input("输入医学问题..."):
-    # 自动创建新对话
+# 语音/图片按钮紧贴对话框下方
+btn_c1, btn_c2, btn_c3, btn_c4 = st.columns([1, 1, 1, 5])
+with btn_c1:
+    st.audio_input("🎤 语音", key=f"ai_voice_{st.session_state._ai_voice_counter}")
+with btn_c2:
+    uploaded_img = st.file_uploader(
+        "📷 图片", type=["jpg", "jpeg", "png", "webp"], key="ai_img",
+        label_visibility="visible",
+    )
+    if uploaded_img:
+        st.session_state._ai_image = base64.b64encode(uploaded_img.getvalue()).decode()
+        st.rerun()
+with btn_c3:
+    if st.session_state._ai_voice_transcript:
+        if st.button("✖ 清除", key="clear_voice"):
+            st.session_state._ai_voice_transcript = ""
+            st.rerun()
+
+# 语音识别结果展示 + 发送
+if st.session_state._ai_voice_transcript:
+    transcript = st.text_area(
+        "语音识别结果（可编辑后发送）",
+        value=st.session_state._ai_voice_transcript,
+        key="_voice_edit",
+        height=68,
+    )
+    if st.button("📤 发送语音内容", type="primary"):
+        prompt = transcript
+        st.session_state._ai_voice_transcript = ""
+        st.session_state._ai_voice_counter += 1
+
+# ─── 处理消息 ───
+if prompt:
     if not conv_id:
         conv_id = chat_db.new_conversation_id()
         st.session_state.ai_current_conv = conv_id
 
-    # 处理图片
-    image_b64 = ""
-    if uploaded_img:
-        image_b64 = base64.b64encode(uploaded_img.getvalue()).decode()
+    image_b64 = st.session_state.get("_ai_image", "")
 
     # 保存用户消息
     chat_db.create("general", conv_id, "user", prompt, image_data=image_b64, model_used=model)
@@ -154,7 +213,7 @@ if prompt := st.chat_input("输入医学问题..."):
             api_messages.append({"role": m["role"], "content": m["content"]})
 
     # 调用 API
-    from core.deepseek_client import get_api_key, get_client, chat_stream, chat_vision_stream
+    from core.deepseek_client import get_api_key, chat_stream, chat_vision_stream
 
     if not get_api_key():
         st.error("请先在「设置」页面配置 API Key")
@@ -179,4 +238,11 @@ if prompt := st.chat_input("输入医学问题..."):
             placeholder.markdown(full_response)
 
         chat_db.create("general", conv_id, "assistant", full_response, model_used=model)
+
+        # 清除图片
+        st.session_state._ai_image = ""
         st.rerun()
+
+# ─── 无对话时的提示 ───
+if not conv_id and not prompt:
+    st.info("💬 在下方输入问题开始新对话")

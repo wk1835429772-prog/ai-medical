@@ -1,9 +1,8 @@
-"""历史趋势页面 -- 原始数据表（颜色标注） + 简单趋势图"""
+"""历史趋势页面 -- 原始数据表（颜色标注）"""
 
 import streamlit as st
 import re
 import pandas as pd
-import plotly.graph_objects as go
 from datetime import date, timedelta
 
 from config import REFERENCE_RANGES
@@ -38,10 +37,10 @@ def _get_ref(key: str):
         return _CUSTOM_RANGES[key]
     return REFERENCE_RANGES.get(key)
 
-st.set_page_config(page_title="历史趋势 - 临床助手", page_icon="📊", layout="wide")
+st.set_page_config(page_title="历史数据 - 临床助手", page_icon="📊", layout="wide")
 from core.ui_style import inject_global_css
 inject_global_css()
-st.title("📊 历史趋势")
+st.title("📊 历史数据")
 
 # ─── 患者选择 ───
 patients = patient_db.get_all()
@@ -76,13 +75,7 @@ if not cards:
 
 dates = [c["data_date"] for c in cards]
 
-# ══════════════════════════════════════════════
-# 上方：原始数据表（颜色标注）
-# ══════════════════════════════════════════════
-st.subheader("📋 原始数据")
-
-# 按维度分组展示
-# 顺序：生命体征 → 血气 → 感染 → 脏器 → 营养 → VTE
+# 按维度分组
 METRIC_GROUPS = [
     {
         "label": "生命体征",
@@ -150,6 +143,16 @@ def _extract_value(card: dict, key: str):
     return val
 
 
+def _format_val(val):
+    """格式化数值为两位小数"""
+    if val is None or val == "" or val == "正常":
+        return ""
+    try:
+        return f"{float(val):.2f}"
+    except (ValueError, TypeError):
+        return str(val)
+
+
 def _color_cell(val, key):
     """根据 REFERENCE_RANGES 返回 CSS 颜色"""
     if val is None or val == "正常" or val == "":
@@ -176,15 +179,18 @@ def _ref_hint(key):
     return f"{ref['lo']}-{ref['hi']} {ref['unit']}"
 
 
+# ══════════════════════════════════════════════
+# 原始数据表（颜色标注）
+# ══════════════════════════════════════════════
+
 for group in METRIC_GROUPS:
     group_metrics = group["metrics"]
-    # 构建 DataFrame
     rows = []
     for card in cards:
         row = {"日期": card["data_date"]}
         for key, label in group_metrics:
-            val = _extract_value(card, key)
-            row[label] = val if val is not None else ""
+            raw = _extract_value(card, key)
+            row[label] = _format_val(raw)
         rows.append(row)
 
     if not rows:
@@ -205,101 +211,18 @@ for group in METRIC_GROUPS:
     if ref_texts:
         st.caption("参考范围 — " + " | ".join(ref_texts))
 
-    # 构建样式 DataFrame
-    def _apply_styles(row):
+    # 样式：颜色标注
+    def _apply_styles(row, _group_metrics=group_metrics):
         styles = [""] * len(row)
-        for i, (key, label) in enumerate(group_metrics):
+        for key, label in _group_metrics:
             col_idx = df.columns.get_loc(label)
-            styles[col_idx] = _color_cell(row[label], key)
+            # 从格式化后的字符串还原原始值用于比较
+            raw = row[label]
+            styles[col_idx] = _color_cell(raw, key)
         return styles
 
     styled = df.style.apply(_apply_styles, axis=1)
     st.dataframe(styled, use_container_width=True, hide_index=True)
-
-# ══════════════════════════════════════════════
-# 下方：趋势图
-# ══════════════════════════════════════════════
-st.divider()
-st.subheader("📈 趋势图")
-
-# 用户选择要展示趋势的指标
-all_metric_keys = []
-all_metric_map = {}
-for group in METRIC_GROUPS:
-    for key, label in group["metrics"]:
-        all_metric_keys.append(key)
-        all_metric_map[key] = label
-
-selected_keys = st.multiselect(
-    "选择指标",
-    options=all_metric_keys,
-    format_func=lambda x: all_metric_map.get(x, x),
-    default=["abg_lac", "pct", "ionized_ca"],
-)
-
-if not selected_keys:
-    st.info("请选择至少一个指标查看趋势")
-    st.stop()
-
-surg_date = patient.get("surgery_date")
-
-COLORS = ["#e63946", "#f4a261", "#2a9d8f", "#264653", "#0077b6", "#8338ec", "#ff006e"]
-
-for idx, key in enumerate(selected_keys):
-    label = all_metric_map.get(key, key)
-    ref = _get_ref(key)
-    color = COLORS[idx % len(COLORS)]
-
-    values = [_extract_value(c, key) for c in cards]
-
-    fig = go.Figure()
-
-    # 正常范围阴影带
-    if ref:
-        fig.add_hrect(
-            y0=ref["lo"], y1=ref["hi"],
-            fillcolor="rgba(34,197,94,0.08)",
-            line_width=0,
-            annotation_text=f"正常: {ref['lo']}-{ref['hi']}",
-            annotation_position="top right",
-            annotation_font_size=10,
-            annotation_font_color="gray",
-        )
-
-    fig.add_trace(
-        go.Scatter(
-            x=dates,
-            y=values,
-            mode="lines+markers",
-            name=label,
-            line=dict(color=color, width=2.5),
-            marker=dict(size=7),
-            hovertemplate=f"{label}: %{{y}}<br>日期: %{{x}}<extra></extra>",
-        )
-    )
-
-    if surg_date:
-        fig.add_vline(
-            x=surg_date,
-            line_dash="dash",
-            line_color="gray",
-            annotation_text="手术日",
-        )
-
-    unit = ref["unit"] if ref else ""
-    yaxis_title = f"{label} ({unit})" if unit else label
-
-    fig.update_layout(
-        title=dict(text=label, font=dict(size=15)),
-        xaxis_title="日期",
-        yaxis_title=yaxis_title,
-        hovermode="x unified",
-        height=300,
-        margin=dict(l=60, r=30, t=45, b=40),
-        showlegend=False,
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
 
 # ─── 底部 ───
 st.divider()
