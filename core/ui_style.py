@@ -174,11 +174,11 @@ details summary {
    移动端适配（≤768px）
    ============================================= */
 @media (max-width: 768px) {
-    /* 全局：收紧边距 */
+    /* 全局：收紧边距 + 避开固定头部 */
     .block-container {
         padding-left: 0.75rem !important;
         padding-right: 0.75rem !important;
-        padding-top: 0.5rem !important;
+        padding-top: 4rem !important;
     }
 
     /* 标题缩放 */

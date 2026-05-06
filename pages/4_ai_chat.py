@@ -97,33 +97,28 @@ if conv_id:
                     pass
             if msg.get("content"):
                 st.markdown(msg["content"])
-else:
-    st.info("👋 在下方输入问题开始新对话，或从左侧选择历史对话。")
-
 # 底部输入区
 st.divider()
 
-# 图片上传 + 语音输入（右下角风格）
-upload_col1, upload_col2, upload_col3 = st.columns([5, 1, 1])
-with upload_col2:
-    uploaded_img = st.file_uploader("📷", type=["jpg", "jpeg", "png", "webp"],
-                                     key="ai_img", label_visibility="collapsed")
-with upload_col3:
+# 图片 + 语音上传（小图标风格）
+upload_c1, upload_c2 = st.columns(2)
+with upload_c1:
+    uploaded_img = st.file_uploader("📷 图片", type=["jpg", "jpeg", "png", "webp"],
+                                     key="ai_img")
+with upload_c2:
     audio_bytes = None
     try:
-        audio_rec = st.audio_input("🎤", key="ai_voice", label_visibility="collapsed")
+        audio_rec = st.audio_input("🎤 语音", key="ai_voice")
         if audio_rec:
             audio_bytes = audio_rec.getvalue()
     except AttributeError:
-        audio_file = st.file_uploader("🎤", type=["wav", "mp3", "m4a"],
-                                       key="ai_audio", label_visibility="collapsed")
+        audio_file = st.file_uploader("🎤 语音", type=["wav", "mp3", "m4a"],
+                                       key="ai_audio")
         if audio_file:
             audio_bytes = audio_file.getvalue()
 
-# 图片预览
 if uploaded_img:
-    img_bytes = uploaded_img.getvalue()
-    st.image(img_bytes, caption="待发送图片", width=200)
+    st.caption(f"📷 已选择：{uploaded_img.name}")
 
 # 聊天输入
 if prompt := st.chat_input("输入医学问题..."):

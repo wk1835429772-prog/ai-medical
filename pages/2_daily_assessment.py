@@ -32,26 +32,39 @@ def get_field_val(field_key: str):
 
 
 def render_field_input(dim_key: str, f: dict, current_val):
+    """渲染单个字段输入框，支持勾选「正常」快速填充"""
     field_key = f"{dim_key}_{f['key']}"
+    is_normal = (current_val == "正常")
+    checkbox_key = f"{field_key}_normal"
     step = float(f.get("step", 1.0))
-    if f["type"] == "number":
-        decimal_places = len(str(step).split(".")[-1]) if "." in str(step) else 0
-        val = st.number_input(
-            f["label"],
-            value=float(current_val) if current_val is not None else None,
-            step=step,
-            format=f"%.{decimal_places}f" if decimal_places else "%g",
-            key=field_key,
-            placeholder="未填",
-        )
-        show_critical(f["key"], val)
-    else:
-        st.text_input(
-            f["label"],
-            value=str(current_val) if current_val else "",
-            key=field_key,
-            placeholder="未填",
-        )
+
+    c_input, c_check = st.columns([4, 1])
+    with c_check:
+        normal_checked = st.checkbox("✓正常", value=is_normal, key=checkbox_key)
+
+    with c_input:
+        if normal_checked:
+            st.text_input(f["label"], value="正常", key=field_key, disabled=True, label_visibility="visible")
+            if f["type"] == "number":
+                show_critical(f["key"], None)
+        elif f["type"] == "number":
+            decimal_places = len(str(step).split(".")[-1]) if "." in str(step) else 0
+            val = st.number_input(
+                f["label"],
+                value=float(current_val) if current_val is not None and current_val != "正常" else None,
+                step=step,
+                format=f"%.{decimal_places}f" if decimal_places else "%g",
+                key=field_key,
+                placeholder="未填",
+            )
+            show_critical(f["key"], val)
+        else:
+            st.text_input(
+                f["label"],
+                value=str(current_val) if current_val and current_val != "正常" else "",
+                key=field_key,
+                placeholder="未填",
+            )
 
 
 VITAL_FIELD_KEYS = {"bp_sys", "bp_dia", "hr", "spo2", "rr", "temp", "intake_vol", "output_vol", "stool_vol"}
