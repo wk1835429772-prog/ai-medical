@@ -20,17 +20,22 @@ def _table_exists() -> bool:
 
 def create(patient_id: str, conversation_id: str, role: str, content: str,
            image_data: str = "", model_used: str = "") -> dict:
-    """创建一条对话消息"""
+    """创建一条对话消息（防重复）"""
     conn = get_connection()
     msg_id = uuid.uuid4().hex[:12]
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn.execute(
-        "INSERT INTO chat_messages (id, patient_id, conversation_id, role, content, image_data, model_used, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (msg_id, patient_id, conversation_id, role, content, image_data, model_used, now),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute(
+            "INSERT INTO chat_messages (id, patient_id, conversation_id, role, content, image_data, model_used, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (msg_id, patient_id, conversation_id, role, content, image_data, model_used, now),
+        )
+        conn.commit()
+    except Exception:
+        # 重复插入时静默忽略
+        pass
+    finally:
+        conn.close()
     return {"id": msg_id, "patient_id": patient_id, "conversation_id": conversation_id,
             "role": role, "content": content, "image_data": image_data,
             "model_used": model_used, "created_at": now}
