@@ -156,24 +156,30 @@ def init_database():
             cursor.execute(f"ALTER TABLE daily_cards ADD COLUMN {col} {col_type}")
     conn.commit()
 
-    # 迁移：chat_messages 表
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS chat_messages (
-            id TEXT PRIMARY KEY,
-            patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-            conversation_id TEXT NOT NULL,
-            role TEXT NOT NULL,
-            content TEXT NOT NULL DEFAULT '',
-            image_data TEXT DEFAULT '',
-            model_used TEXT DEFAULT '',
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
-        )
-    """)
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_patient ON chat_messages(patient_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_messages(conversation_id)")
+    # 迁移：chat_messages 表（使用独立连接，避免游标状态问题）
     conn.commit()
-
     conn.close()
+    try:
+        conn2 = get_connection()
+        conn2.execute("""
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id TEXT PRIMARY KEY,
+                patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                conversation_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                image_data TEXT DEFAULT '',
+                model_used TEXT DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            )
+        """)
+        conn2.execute("CREATE INDEX IF NOT EXISTS idx_chat_patient ON chat_messages(patient_id)")
+        conn2.execute("CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_messages(conversation_id)")
+        conn2.commit()
+        conn2.close()
+    except Exception:
+        pass
+
     backup_database()
     _seed_default_rules()
 

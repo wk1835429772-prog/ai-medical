@@ -62,8 +62,17 @@ def render_field_input(dim_key: str, f: dict, current_val):
         )
 
 
+VITAL_FIELD_KEYS = {"bp_sys", "bp_dia", "hr", "spo2", "rr", "temp", "intake_vol", "output_vol", "stool_vol"}
+
+
 def collect_save_data() -> dict:
     save_data = {}
+    # 生命体征概览区的值（vital_* 前缀）
+    for vk in VITAL_FIELD_KEYS:
+        widget_key = f"vital_{vk}"
+        if widget_key in st.session_state:
+            save_data[vk] = st.session_state[widget_key]
+    # 七维字段
     for dim in DIMENSIONS:
         for f in dim["today_fields"]:
             key = f"{dim['key']}_{f['key']}"
@@ -159,30 +168,54 @@ left_col, right_col = st.columns([3, 2])
 
 with left_col:
 
-    # ─── 生命体征概览 ───
+    # ─── 生命体征概览（可编辑） ───
     st.subheader("📊 生命体征")
 
     cols = st.columns(6)
-    vitals = [
-        ("bp_sys", "收缩压", "mmHg"),
-        ("bp_dia", "舒张压", "mmHg"),
-        ("hr", "心率", "bpm"),
-        ("spo2", "SpO₂", "%"),
-        ("rr", "RR", "bpm"),
-        ("temp", "体温", "°C"),
+    vitals_config = [
+        ("bp_sys", "收缩压", 1, "%.0f"),
+        ("bp_dia", "舒张压", 1, "%.0f"),
+        ("hr", "心率", 1, "%.0f"),
+        ("spo2", "SpO₂", 1, "%.0f"),
+        ("rr", "RR", 1, "%.0f"),
+        ("temp", "体温", 0.1, "%.1f"),
     ]
-    for i, (key, label, unit) in enumerate(vitals):
-        val = daily_card.get(key)
+    for i, (key, label, step, fmt) in enumerate(vitals_config):
         with cols[i]:
-            st.metric(label, f"{val} {unit}" if val is not None else "—")
+            st.number_input(
+                label,
+                value=float(daily_card.get(key)) if daily_card.get(key) is not None else None,
+                step=float(step),
+                format=fmt,
+                key=f"vital_{key}",
+                placeholder="—",
+            )
 
-    # 内联计算：MAP + 出入量平衡
-    bp_sys = daily_card.get("bp_sys")
-    bp_dia = daily_card.get("bp_dia")
-    map_val = calc_map(bp_sys, bp_dia)
-    intake = daily_card.get("intake_vol")
-    output = daily_card.get("output_vol")
-    bal_val = calc_balance(intake, output)
+    # 第二行：出入量
+    io_cols = st.columns(3)
+    io_config = [
+        ("intake_vol", "总入量 (mL)", 50, "%.0f"),
+        ("output_vol", "总出量 (mL)", 50, "%.0f"),
+        ("stool_vol", "大便量 (mL)", 50, "%.0f"),
+    ]
+    for i, (key, label, step, fmt) in enumerate(io_config):
+        with io_cols[i]:
+            st.number_input(
+                label,
+                value=float(daily_card.get(key)) if daily_card.get(key) is not None else None,
+                step=float(step),
+                format=fmt,
+                key=f"vital_{key}",
+                placeholder="—",
+            )
+
+    # 内联计算：MAP + 出入量 + OI
+    bp_sys_val = st.session_state.get("vital_bp_sys")
+    bp_dia_val = st.session_state.get("vital_bp_dia")
+    map_val = calc_map(bp_sys_val, bp_dia_val)
+    intake_val = st.session_state.get("vital_intake_vol")
+    output_val = st.session_state.get("vital_output_vol")
+    bal_val = calc_balance(intake_val, output_val)
 
     calc_parts = []
     if map_val is not None:
@@ -213,39 +246,21 @@ with left_col:
     for dim in DIMENSIONS:
         with st.expander(f"{dim['icon']} {dim['name']}", expanded=False):
 
-            # 今日晨 7:00 数据
+            # 今日晨 7:00 数据（跳过已在生命体征概览中渲染的字段）
             today_groups = dim.get("today_groups", [])
             if today_groups:
                 st.markdown("##### 🌅 今日晨7:00")
                 for group in today_groups:
+                    fields = [f for f in group["fields"] if f["key"] not in VITAL_FIELD_KEYS]
+                    if not fields:
+                        continue
                     if group.get("label"):
                         st.markdown(f'<p class="group-label">{group["label"]}</p>', unsafe_allow_html=True)
-                    fields = group["fields"]
                     cols = st.columns(min(4, max(1, len(fields))))
                     for i, f in enumerate(fields):
                         with cols[i % min(4, max(1, len(fields)))]:
                             current_val = daily_card.get(f["key"])
                             render_field_input(dim["key"], f, current_val)
-
-                    # 内联计算
-                    if dim["key"] == "circulation" and group.get("label") == "生命体征":
-                        bp_s = get_field_val("bp_sys")
-                        bp_d = get_field_val("bp_dia")
-                        m = calc_map(bp_s, bp_d)
-                        if m is not None:
-                            st.caption(f"↳ MAP = **{m}** mmHg")
-                    elif dim["key"] == "circulation" and group.get("label") == "出入量":
-                        inp = get_field_val("intake_vol")
-                        out = get_field_val("output_vol")
-                        b = calc_balance(inp, out)
-                        if b is not None:
-                            st.caption(f"↳ 平衡 = **{b:+.0f}** mL")
-                    elif dim["key"] == "respiration" and group.get("label") == "血气分析":
-                        p = get_field_val("abg_pao2")
-                        f_val = get_field_val("vent_fio2")
-                        oi = calc_oi(p, f_val)
-                        if oi is not None:
-                            st.caption(f"↳ OI = **{oi}**")
 
             # 昨日结果
             if dim["yesterday_fields"]:
