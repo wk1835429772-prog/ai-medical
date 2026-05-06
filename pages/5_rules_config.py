@@ -1,4 +1,4 @@
-"""规则配置页面 — API Key 配置 + 黄金规则管理 + 系统提示词预览"""
+"""规则配置页面 — API Key 配置 + 黄金规则管理 + 参考范围 + 系统提示词预览"""
 
 import streamlit as st
 import uuid
@@ -6,12 +6,14 @@ import uuid
 from core.database import init_database
 init_database()
 
+from config import REFERENCE_RANGES
+
 st.set_page_config(page_title="规则配置 - 临床助手", page_icon="⚙️", layout="wide")
 from core.ui_style import inject_global_css
 inject_global_css()
 st.title("⚙️ 设置")
 
-tab1, tab2, tab3 = st.tabs(["🔑 API 配置", "📋 黄金规则", "📜 系统提示词"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔑 API 配置", "📋 黄金规则", "📐 参考范围", "📜 系统提示词"])
 
 # --- Tab 1: API 配置 ---
 with tab1:
@@ -153,7 +155,180 @@ with tab2:
                     conn.close()
                     st.rerun()
 
-# --- Tab 3: 系统提示词预览 ---
+# --- Tab 3: 参考范围 ---
+with tab4:
+    st.subheader("临床参考范围设置")
+    st.caption("调整各指标的正常值范围，将影响历史趋势页面的颜色标注。修改后自动保存到本地数据库。")
+
+    from core.database import get_connection
+
+    # 从数据库加载自定义范围，回退到 config 默认值
+    def _load_ranges() -> dict:
+        ranges = {}
+        conn = get_connection()
+        try:
+            rows = conn.execute("SELECT key, value FROM settings WHERE key LIKE 'ref_%'").fetchall()
+            import json
+            for r in rows:
+                metric_key = r["key"][4:]  # strip "ref_" prefix
+                try:
+                    ranges[metric_key] = dict(json.loads(r["value"]))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        finally:
+            conn.close()
+        return ranges
+
+    custom_ranges = _load_ranges()
+
+    def _get_ref(key):
+        if key in custom_ranges:
+            return custom_ranges[key]
+        return REFERENCE_RANGES.get(key)
+
+    st.markdown("##### 生命体征")
+    vital_metrics = ["bp_sys", "bp_dia", "hr", "spo2", "rr", "temp"]
+    for key in vital_metrics:
+        ref = _get_ref(key)
+        if not ref:
+            continue
+        c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+        with c1:
+            st.markdown(f"**{ref['label']}** ({ref['unit']})")
+        with c2:
+            lo = st.number_input(
+                "下限", value=float(ref["lo"]), step=1.0,
+                key=f"ref_lo_{key}", format="%g",
+            )
+        with c3:
+            hi = st.number_input(
+                "上限", value=float(ref["hi"]), step=1.0,
+                key=f"ref_hi_{key}", format="%g",
+            )
+        with c4:
+            if st.button("保存", key=f"ref_save_{key}"):
+                import json
+                conn = get_connection()
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))",
+                    (f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]})),
+                )
+                conn.commit()
+                conn.close()
+                st.success(f"{ref['label']} 已更新")
+                st.rerun()
+
+    st.markdown("##### 血气分析")
+    abg_metrics = ["abg_ph", "abg_pao2", "abg_paco2", "abg_hco3", "abg_lac"]
+    for key in abg_metrics:
+        ref = _get_ref(key)
+        if not ref:
+            continue
+        c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+        with c1:
+            st.markdown(f"**{ref['label']}** ({ref['unit']})")
+        with c2:
+            lo = st.number_input(
+                "下限", value=float(ref["lo"]), step=0.1,
+                key=f"ref_lo_{key}", format="%.2f",
+            )
+        with c3:
+            hi = st.number_input(
+                "上限", value=float(ref["hi"]), step=0.1,
+                key=f"ref_hi_{key}", format="%.2f",
+            )
+        with c4:
+            if st.button("保存", key=f"ref_save_{key}"):
+                import json
+                conn = get_connection()
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))",
+                    (f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]})),
+                )
+                conn.commit()
+                conn.close()
+                st.success(f"{ref['label']} 已更新")
+                st.rerun()
+
+    st.markdown("##### 感染指标")
+    inf_metrics = ["wbc", "neut_pct", "pct", "il6"]
+    for key in inf_metrics:
+        ref = _get_ref(key)
+        if not ref:
+            continue
+        c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+        with c1:
+            st.markdown(f"**{ref['label']}** ({ref['unit']})")
+        with c2:
+            lo = st.number_input(
+                "下限", value=float(ref["lo"]), step=0.1,
+                key=f"ref_lo_{key}", format="%.2f",
+            )
+        with c3:
+            hi = st.number_input(
+                "上限", value=float(ref["hi"]), step=0.1,
+                key=f"ref_hi_{key}", format="%.2f",
+            )
+        with c4:
+            if st.button("保存", key=f"ref_save_{key}"):
+                import json
+                conn = get_connection()
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))",
+                    (f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]})),
+                )
+                conn.commit()
+                conn.close()
+                st.success(f"{ref['label']} 已更新")
+                st.rerun()
+
+    st.markdown("##### 其他指标")
+    other_metrics = ["bnp", "ionized_ca", "albumin", "prealbumin", "d_dimer", "vent_fio2", "vent_peep"]
+    for key in other_metrics:
+        ref = _get_ref(key)
+        if not ref:
+            continue
+        step = 0.01 if key in ("ionized_ca",) else (100 if key == "d_dimer" else 1)
+        fmt = "%.2f" if key in ("ionized_ca",) else ("%g")
+        c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+        with c1:
+            st.markdown(f"**{ref['label']}** ({ref['unit']})")
+        with c2:
+            lo = st.number_input(
+                "下限", value=float(ref["lo"]), step=float(step),
+                key=f"ref_lo_{key}", format=fmt,
+            )
+        with c3:
+            hi = st.number_input(
+                "上限", value=float(ref["hi"]), step=float(step),
+                key=f"ref_hi_{key}", format=fmt,
+            )
+        with c4:
+            if st.button("保存", key=f"ref_save_{key}"):
+                import json
+                conn = get_connection()
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))",
+                    (f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]})),
+                )
+                conn.commit()
+                conn.close()
+                st.success(f"{ref['label']} 已更新")
+                st.rerun()
+
+    st.divider()
+    if st.button("🔄 恢复默认值", help="将所有参考范围恢复为系统默认值"):
+        conn = get_connection()
+        conn.execute("DELETE FROM settings WHERE key LIKE 'ref_%'")
+        conn.commit()
+        conn.close()
+        st.success("已恢复默认值")
+        st.rerun()
+
+
+# --- Tab 4: 系统提示词预览 ---
 with tab3:
     st.subheader("系统提示词预览")
     from prompts.prompt_builder import build_system_prompt

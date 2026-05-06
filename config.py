@@ -197,6 +197,32 @@ CRITICAL_THRESHOLDS = {
     "d_dimer": {"hi": 3000, "label": "D-二聚体 >3000 ng/mL"},
 }
 
+# 正常值参考范围（可在设置页面微调）
+REFERENCE_RANGES = {
+    "bp_sys":    {"label": "收缩压",     "lo": 90,  "hi": 140, "unit": "mmHg"},
+    "bp_dia":    {"label": "舒张压",     "lo": 60,  "hi": 90,  "unit": "mmHg"},
+    "hr":        {"label": "心率",       "lo": 60,  "hi": 100, "unit": "bpm"},
+    "spo2":      {"label": "SpO₂",      "lo": 95,  "hi": 100, "unit": "%"},
+    "rr":        {"label": "RR",        "lo": 12,  "hi": 20,  "unit": "bpm"},
+    "temp":      {"label": "体温",       "lo": 36.0,"hi": 37.3,"unit": "°C"},
+    "abg_ph":    {"label": "pH",        "lo": 7.35,"hi": 7.45,"unit": ""},
+    "abg_pao2":  {"label": "PaO₂",     "lo": 80,  "hi": 100, "unit": "mmHg"},
+    "abg_paco2": {"label": "PaCO₂",    "lo": 35,  "hi": 45,  "unit": "mmHg"},
+    "abg_hco3":  {"label": "HCO₃⁻",   "lo": 22,  "hi": 26,  "unit": "mmol/L"},
+    "abg_lac":   {"label": "乳酸",       "lo": 0,   "hi": 2,   "unit": "mmol/L"},
+    "wbc":       {"label": "WBC",       "lo": 4,   "hi": 10,  "unit": "×10⁹/L"},
+    "neut_pct":  {"label": "中性粒%",    "lo": 50,  "hi": 70,  "unit": "%"},
+    "pct":       {"label": "PCT",       "lo": 0,   "hi": 0.5, "unit": "ng/mL"},
+    "il6":       {"label": "IL-6",      "lo": 0,   "hi": 7,   "unit": "pg/mL"},
+    "bnp":       {"label": "BNP",       "lo": 0,   "hi": 100, "unit": "pg/mL"},
+    "ionized_ca":{"label": "离子钙",     "lo": 1.15,"hi": 1.30,"unit": "mmol/L"},
+    "albumin":   {"label": "白蛋白",     "lo": 35,  "hi": 55,  "unit": "g/L"},
+    "prealbumin":{"label": "前白蛋白",   "lo": 200, "hi": 400, "unit": "mg/L"},
+    "d_dimer":   {"label": "D-二聚体",   "lo": 0,   "hi": 500, "unit": "ng/mL"},
+    "vent_fio2": {"label": "FiO₂",     "lo": 21,  "hi": 60,  "unit": "%"},
+    "vent_peep": {"label": "PEEP",      "lo": 5,   "hi": 10,  "unit": "cmH₂O"},
+}
+
 # 历史趋势可用指标
 TREND_METRICS = [
     {"key": "abg_lac", "label": "乳酸 (mmol/L)", "color": "#e63946"},
