@@ -2,12 +2,12 @@
 
 # 应用信息
 APP_NAME = "临床助手"
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.1.0"
 
 # DeepSeek API 配置
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_MODEL_FAST = "deepseek-chat"
-DEEPSEEK_MODEL_PRO = "deepseek-reasoner"
+DEEPSEEK_MODEL_FAST = "deepseek-v4-flash"
+DEEPSEEK_MODEL_PRO = "deepseek-v4-pro"
 DEEPSEEK_MAX_TOKENS = 4096
 
 # 数据库
@@ -20,19 +20,30 @@ def _build_groups(dim):
         dim["today_groups"] = [{"label": "", "fields": dim["today_fields"]}]
 
 
-# 七维框架定义
+# 七维框架定义（顺序：原发病 → 循环 → 呼吸 → 感染 → 脏器 → 营养 → VTE）
 DIMENSIONS = [
+    {
+        "key": "primary_disease",
+        "name": "原发病",
+        "icon": "🩹",
+        "notes_key": "primary_disease_notes",
+        "today_fields": [
+            {"key": "drain_vol", "label": "引流量 (mL)", "type": "number", "step": 10},
+            {"key": "drain_char", "label": "引流性状", "type": "text"},
+            {"key": "wound_eval", "label": "伤口/皮瓣评估", "type": "text"},
+        ],
+        "yesterday_fields": [],
+    },
     {
         "key": "circulation",
         "name": "循环",
         "icon": "❤️",
+        "notes_key": "circulation_notes",
         "today_fields": [
-            # 生命体征
             {"key": "bp_sys", "label": "收缩压 (mmHg)", "type": "number", "step": 1},
             {"key": "bp_dia", "label": "舒张压 (mmHg)", "type": "number", "step": 1},
             {"key": "hr", "label": "心率 (bpm)", "type": "number", "step": 1},
             {"key": "spo2", "label": "SpO₂ (%)", "type": "number", "step": 1},
-            # 出入量
             {"key": "intake_vol", "label": "总入量 (mL)", "type": "number", "step": 50},
             {"key": "output_vol", "label": "总出量 (mL)", "type": "number", "step": 50},
             {"key": "stool_vol", "label": "大便量 (mL)", "type": "number", "step": 50},
@@ -67,19 +78,17 @@ DIMENSIONS = [
         "key": "respiration",
         "name": "呼吸 / 酸碱",
         "icon": "🫁",
+        "notes_key": "respiration_notes",
         "today_fields": [
-            # 血气分析（从循环维度迁入）
             {"key": "abg_ph", "label": "pH", "type": "number", "step": 0.01},
             {"key": "abg_pao2", "label": "PaO₂ (mmHg)", "type": "number", "step": 0.1},
             {"key": "abg_paco2", "label": "PaCO₂ (mmHg)", "type": "number", "step": 0.1},
             {"key": "abg_hco3", "label": "HCO₃⁻ (mmol/L)", "type": "number", "step": 0.1},
             {"key": "abg_lac", "label": "乳酸 (mmol/L)", "type": "number", "step": 0.1},
-            # 呼吸支持
             {"key": "vent_mode", "label": "呼吸机模式", "type": "text"},
             {"key": "vent_fio2", "label": "FiO₂ (%)", "type": "number", "step": 5},
             {"key": "vent_peep", "label": "PEEP (cmH₂O)", "type": "number", "step": 1},
             {"key": "sputum_char", "label": "痰液性状", "type": "text"},
-            # 呼吸频率
             {"key": "rr", "label": "RR (bpm)", "type": "number", "step": 1},
         ],
         "today_groups": [
@@ -118,6 +127,7 @@ DIMENSIONS = [
         "key": "infection",
         "name": "感染",
         "icon": "🌡️",
+        "notes_key": "infection_notes",
         "today_fields": [
             {"key": "temp", "label": "体温 (°C)", "type": "number", "step": 0.1},
         ],
@@ -133,6 +143,7 @@ DIMENSIONS = [
         "key": "organs",
         "name": "脏器",
         "icon": "🫘",
+        "notes_key": "organs_notes",
         "today_fields": [
             {"key": "urine_vol", "label": "尿量 (mL)", "type": "number", "step": 50},
         ],
@@ -145,20 +156,10 @@ DIMENSIONS = [
         ],
     },
     {
-        "key": "primary_disease",
-        "name": "原发病",
-        "icon": "🩹",
-        "today_fields": [
-            {"key": "drain_vol", "label": "引流量 (mL)", "type": "number", "step": 10},
-            {"key": "drain_char", "label": "引流性状", "type": "text"},
-            {"key": "wound_eval", "label": "伤口/皮瓣评估", "type": "text"},
-        ],
-        "yesterday_fields": [],
-    },
-    {
         "key": "nutrition",
         "name": "营养",
         "icon": "🍽️",
+        "notes_key": "nutrition_notes",
         "today_fields": [
             {"key": "nutrition_route", "label": "营养途径", "type": "text"},
             {"key": "enteral_vol", "label": "肠内入量 (mL)", "type": "number", "step": 50},
@@ -173,6 +174,7 @@ DIMENSIONS = [
         "key": "vte",
         "name": "VTE",
         "icon": "🩸",
+        "notes_key": "vte_notes",
         "today_fields": [
             {"key": "vte_prophylaxis", "label": "物理预防措施", "type": "text"},
         ],

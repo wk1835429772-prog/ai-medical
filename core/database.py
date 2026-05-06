@@ -138,6 +138,41 @@ def init_database():
         cursor.execute("ALTER TABLE daily_cards ADD COLUMN rr REAL")
         conn.commit()
 
+    # 迁移：v1.1.0 新增列
+    new_cols = {
+        "current_diagnosis": "TEXT DEFAULT ''",
+        "treatment_plan": "TEXT DEFAULT ''",
+        "circulation_notes": "TEXT DEFAULT ''",
+        "respiration_notes": "TEXT DEFAULT ''",
+        "infection_notes": "TEXT DEFAULT ''",
+        "organs_notes": "TEXT DEFAULT ''",
+        "primary_disease_notes": "TEXT DEFAULT ''",
+        "nutrition_notes": "TEXT DEFAULT ''",
+        "vte_notes": "TEXT DEFAULT ''",
+    }
+    existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(daily_cards)").fetchall()}
+    for col, col_type in new_cols.items():
+        if col not in existing_cols:
+            cursor.execute(f"ALTER TABLE daily_cards ADD COLUMN {col} {col_type}")
+    conn.commit()
+
+    # 迁移：chat_messages 表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id TEXT PRIMARY KEY,
+            patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            conversation_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '',
+            image_data TEXT DEFAULT '',
+            model_used TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_patient ON chat_messages(patient_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_messages(conversation_id)")
+    conn.commit()
+
     conn.close()
     backup_database()
     _seed_default_rules()

@@ -1,11 +1,13 @@
-"""历史趋势页面 — Plotly 多指标折线图"""
+"""历史趋势页面 — 每个指标独立图表（不同单位/量程）"""
 
 import streamlit as st
 import re
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from datetime import date, timedelta
 from config import TREND_METRICS
+from core.database import init_database
+init_database()
+
 import models.patient as patient_db
 import models.daily_card as card_db
 
@@ -30,7 +32,7 @@ selected_id = st.selectbox(
 )
 patient = patient_db.get_by_id(selected_id)
 
-# 默认日期范围：最近30天
+# 日期范围
 end_date = date.today()
 start_date = end_date - timedelta(days=30)
 col1, col2 = st.columns(2)
@@ -58,35 +60,25 @@ if not cards:
     st.info("该时间段内暂无日卡数据")
     st.stop()
 
-# 准备绘图数据
 dates = [c["data_date"] for c in cards]
 
-# 计算氧合指数（需要单独计算）
-# 使用 Plotly 子图
-fig = make_subplots(specs=[[{"secondary_y": False}]])
-fig.update_layout(
-    title=f"{patient['name_abbr']} 历史趋势",
-    xaxis_title="日期",
-    hovermode="x unified",
-    height=500,
-    legend=dict(orientation="h", yanchor="bottom", y=1.02),
-)
+# 术后日期标注
+surg_date = patient.get("surgery_date")
 
+# 每个指标独立图表
 for key in selected_keys:
     meta = metric_options[key]
     values = []
     for c in cards:
         if key == "abg_pao2":
-            # 氧合指数 = PaO2/FiO2
-            pao2 = c.get("abg_pao2") if c.get("abg_pao2") else None
-            fio2 = c.get("vent_fio2") if c.get("vent_fio2") else None
+            pao2 = c.get("abg_pao2")
+            fio2 = c.get("vent_fio2")
             if pao2 and fio2:
                 fio2_decimal = fio2 / 100 if fio2 > 1 else fio2
                 val = round(pao2 / fio2_decimal, 1) if fio2_decimal > 0 else None
             else:
                 val = None
         elif key == "renal_func_cr":
-            # 尝试从 renal_func 文本中提取肌酐值
             rf = c.get("renal_func")
             val = None
             if rf:
@@ -97,39 +89,51 @@ for key in selected_keys:
             val = c.get(key)
         values.append(val)
 
+    fig = go.Figure()
     fig.add_trace(
         go.Scatter(
             x=dates,
             y=values,
             mode="lines+markers",
             name=meta["label"],
-            line=dict(color=meta.get("color", "#0077b6"), width=2),
-            marker=dict(size=6),
+            line=dict(color=meta.get("color", "#0077b6"), width=2.5),
+            marker=dict(size=7),
             hovertemplate=f"{meta['label']}: %{{y}}<br>日期: %{{x}}<extra></extra>",
+            fill="tozeroy",
+            fillcolor=f"rgba({int(meta.get('color', '#0077b6')[1:3], 16)}, "
+                      f"{int(meta.get('color', '#0077b6')[3:5], 16)}, "
+                      f"{int(meta.get('color', '#0077b6')[5:7], 16)}, 0.08)",
         )
     )
 
-# 术后天数标注
-if patient.get("surgery_date"):
-    surg_date = patient["surgery_date"]
-    fig.add_vline(
-        x=surg_date,
-        line_dash="dash",
-        line_color="gray",
-        annotation_text=f"手术日 {surg_date}",
+    if surg_date:
+        fig.add_vline(
+            x=surg_date,
+            line_dash="dash",
+            line_color="gray",
+            annotation_text="手术日",
+        )
+
+    fig.update_layout(
+        title=dict(text=meta["label"], font=dict(size=16)),
+        xaxis_title="日期",
+        yaxis_title=meta["label"],
+        hovermode="x unified",
+        height=350,
+        margin=dict(l=60, r=30, t=50, b=40),
+        showlegend=False,
     )
 
-st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
 # 数据表格
 st.divider()
-st.subheader("📋 原始数据")
-if st.checkbox("显示数据表格"):
+with st.expander("📋 原始数据表格", expanded=False):
     table_data = []
     for c in cards:
         row = {"日期": c["data_date"]}
         for key in selected_keys:
             meta = metric_options[key]
-            row[meta["label"]] = c.get(key, "-")
+            row[meta["label"]] = c.get(key, "—")
         table_data.append(row)
     st.dataframe(table_data, use_container_width=True)

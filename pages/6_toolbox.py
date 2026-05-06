@@ -5,6 +5,9 @@ import json
 import os
 import sys
 
+from core.database import init_database
+init_database()
+
 st.set_page_config(page_title="工具箱 - 临床助手", page_icon="🧮", layout="wide")
 from core.ui_style import inject_global_css
 inject_global_css()

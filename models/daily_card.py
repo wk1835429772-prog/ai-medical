@@ -42,6 +42,10 @@ def save(patient_id: str, data_date: str, data: dict) -> dict:
         "albumin", "prealbumin",
         "vte_prophylaxis",
         "d_dimer", "leg_us",
+        # v1.1.0 新增
+        "current_diagnosis", "treatment_plan",
+        "circulation_notes", "respiration_notes", "infection_notes",
+        "organs_notes", "primary_disease_notes", "nutrition_notes", "vte_notes",
     ]
 
     if existing:

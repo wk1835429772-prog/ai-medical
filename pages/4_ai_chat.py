@@ -1,6 +1,10 @@
 """AI 对话页面 — 独立医学问答 + 教学深度滑块"""
 
 import streamlit as st
+
+from core.database import init_database
+init_database()
+
 from config import TEACHING_MODES
 
 st.set_page_config(page_title="AI对话 - 临床助手", page_icon="🤖", layout="wide")
@@ -22,7 +26,7 @@ with st.sidebar:
 
     model = st.radio(
         "模型",
-        ["deepseek-chat", "deepseek-reasoner"],
+        ["deepseek-v4-flash", "deepseek-v4-pro"],
         horizontal=True,
         index=0,
     )

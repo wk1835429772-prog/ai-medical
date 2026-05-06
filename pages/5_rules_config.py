@@ -3,6 +3,9 @@
 import streamlit as st
 import uuid
 
+from core.database import init_database
+init_database()
+
 st.set_page_config(page_title="规则配置 - 临床助手", page_icon="⚙️", layout="wide")
 from core.ui_style import inject_global_css
 inject_global_css()

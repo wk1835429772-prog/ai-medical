@@ -2,6 +2,10 @@
 
 import streamlit as st
 from datetime import date
+
+from core.database import init_database
+init_database()
+
 import models.patient as patient_db
 from core.calculator import calc_postop_days
 
