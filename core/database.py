@@ -131,6 +131,13 @@ def init_database():
     """)
 
     conn.commit()
+
+    # 迁移：添加 rr 列（如果不存在）
+    existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(daily_cards)").fetchall()}
+    if "rr" not in existing_cols:
+        cursor.execute("ALTER TABLE daily_cards ADD COLUMN rr REAL")
+        conn.commit()
+
     conn.close()
     backup_database()
     _seed_default_rules()

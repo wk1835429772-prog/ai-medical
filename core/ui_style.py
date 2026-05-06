@@ -33,6 +33,17 @@ h2, h3 {
     font-weight: 700 !important;
 }
 
+/* === 分组标签 === */
+.group-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #4a5568;
+    padding: 4px 0 2px 0;
+    border-bottom: 1px dashed #e2e8f0;
+    margin-bottom: 8px;
+    margin-top: 4px;
+}
+
 /* === 按钮 === */
 .stButton > button {
     border-radius: 8px;
@@ -148,20 +159,106 @@ details summary {
     padding: 4px;
 }
 
-/* === 移动端适配 === */
-@media (max-width: 768px) {
-    .stColumns > div {
-        min-width: 0 !important;
-    }
-    h1 { font-size: 1.5rem !important; }
-}
-
 /* === Plotly 图表 === */
 .stPlotlyChart {
     border-radius: 12px;
     border: 1px solid #e5e7eb;
     overflow: hidden;
     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+/* =============================================
+   移动端适配（≤768px）
+   ============================================= */
+@media (max-width: 768px) {
+    /* 全局：收紧边距 */
+    .block-container {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        padding-top: 0.5rem !important;
+    }
+
+    /* 标题缩放 */
+    h1 { font-size: 1.3rem !important; }
+    h2 { font-size: 1.1rem !important; }
+    h3 { font-size: 1rem !important; }
+
+    /* 所有列布局自动堆叠为全宽 */
+    [data-testid="stHorizontalBlock"] > div {
+        flex: 1 1 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* 输入框：防 iOS 自动缩放 + 触控目标 ≥44px */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div,
+    .stDateInput > div > div > input {
+        min-height: 44px !important;
+        font-size: 16px !important;
+    }
+
+    /* 按钮：触控目标 */
+    .stButton > button {
+        min-height: 44px !important;
+        font-size: 0.95rem !important;
+        padding: 8px 16px !important;
+        width: 100% !important;
+    }
+
+    /* Metric 卡片：紧凑 */
+    [data-testid="stMetric"] {
+        padding: 10px 12px !important;
+        margin-bottom: 4px !important;
+    }
+    [data-testid="stMetric"] label {
+        font-size: 0.75rem !important;
+    }
+    [data-testid="stMetric"] [data-testid="stMetricValue"] {
+        font-size: 1.1rem !important;
+    }
+
+    /* Expander：紧凑 */
+    details {
+        margin-bottom: 4px !important;
+    }
+
+    /* Radio：自动换行 */
+    .stRadio > div {
+        flex-wrap: wrap !important;
+    }
+
+    /* 侧边栏收窄 */
+    section[data-testid="stSidebar"] {
+        width: 260px !important;
+    }
+
+    /* 分组标签 */
+    .group-label {
+        font-size: 0.8rem !important;
+    }
+
+    /* 表格横向滚动 */
+    [data-testid="stDataFrame"] {
+        overflow-x: auto !important;
+    }
+
+    /* 图表高度自适应 */
+    .stPlotlyChart {
+        min-height: 300px;
+    }
+}
+
+/* === 平板适配（769-1024px）=== */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .stButton > button {
+        min-height: 40px !important;
+    }
+    [data-testid="stMetric"] {
+        padding: 12px !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)

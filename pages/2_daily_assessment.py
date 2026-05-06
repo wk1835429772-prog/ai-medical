@@ -59,11 +59,61 @@ daily_card = card_db.get_or_create(selected_id, data_date_str)
 
 st.divider()
 
-# 辅助函数：检查危急值
+
+# --- 辅助函数 ---
 def show_critical(key, value):
     is_crit, label = check_critical(key, value)
     if is_crit:
         st.error(label)
+
+
+def get_field_val(field_key: str):
+    """跨维度查找 session_state 中的字段值"""
+    for d in DIMENSIONS:
+        key = f"{d['key']}_{field_key}"
+        if key in st.session_state:
+            return st.session_state[key]
+    return None
+
+
+def render_field_input(dim_key: str, f: dict, current_val):
+    """渲染单个字段输入框（number 或 text）"""
+    field_key = f"{dim_key}_{f['key']}"
+    step = float(f.get("step", 1.0))
+    if f["type"] == "number":
+        decimal_places = len(str(step).split(".")[-1]) if "." in str(step) else 0
+        val = st.number_input(
+            f["label"],
+            value=float(current_val) if current_val is not None else None,
+            step=step,
+            format=f"%.{decimal_places}f" if decimal_places else "%g",
+            key=field_key,
+            placeholder="未填",
+        )
+        show_critical(f["key"], val)
+    else:
+        st.text_input(
+            f["label"],
+            value=str(current_val) if current_val else "",
+            key=field_key,
+            placeholder="未填",
+        )
+
+
+def collect_save_data() -> dict:
+    """收集所有维度的字段数据用于保存"""
+    save_data = {}
+    for dim in DIMENSIONS:
+        for f in dim["today_fields"]:
+            key = f"{dim['key']}_{f['key']}"
+            if key in st.session_state:
+                save_data[f["key"]] = st.session_state[key]
+        for f in dim["yesterday_fields"]:
+            key = f"{dim['key']}_{f['key']}"
+            if key in st.session_state:
+                save_data[f["key"]] = st.session_state[key]
+    return save_data
+
 
 # --- 左右两栏布局 ---
 left_col, right_col = st.columns([3, 2])
@@ -71,92 +121,51 @@ left_col, right_col = st.columns([3, 2])
 with left_col:
     st.subheader(f"📋 {data_date_str} 日卡数据")
 
-    # 保存按钮放在顶部
+    # 保存按钮
     if st.button("💾 保存日卡", type="primary", use_container_width=True):
-        # 收集所有输入数据
-        save_data = {}
-        for dim in DIMENSIONS:
-            for f in dim["today_fields"]:
-                key = f"{dim['key']}_{f['key']}"
-                if key in st.session_state:
-                    save_data[f["key"]] = st.session_state[key]
-            for f in dim["yesterday_fields"]:
-                key = f"{dim['key']}_{f['key']}"
-                if key in st.session_state:
-                    save_data[f["key"]] = st.session_state[key]
+        save_data = collect_save_data()
         card_db.save(selected_id, data_date_str, save_data)
         st.success("✅ 日卡已保存")
         st.rerun()
 
     st.divider()
 
-    # 七维折叠卡片
+    # 七维折叠卡片 — 分组渲染
     for dim in DIMENSIONS:
         with st.expander(f"{dim['icon']} {dim['name']}", expanded=False):
             # 今日晨7:00
-            if dim["today_fields"]:
+            today_groups = dim.get("today_groups", [])
+            if today_groups:
                 st.markdown("##### 🌅 今日晨7:00")
-                cols = st.columns(min(4, len(dim["today_fields"])))
-                for i, f in enumerate(dim["today_fields"]):
-                    with cols[i % 4]:
-                        field_key = f"{dim['key']}_{f['key']}"
-                        current_val = daily_card.get(f["key"]) if daily_card else None
-
-                        if f["type"] == "number":
-                            val = st.number_input(
-                                f["label"],
-                                value=float(current_val) if current_val is not None else None,
-                                step=f.get("step", 1.0),
-                                format=f"%.{len(str(f.get('step',1)).split('.')[-1])}f" if '.' in str(f.get('step',1)) else "%g",
-                                key=field_key,
-                                placeholder="未填",
-                            )
-                            show_critical(f["key"], val)
-                        else:
-                            val = st.text_input(
-                                f["label"],
-                                value=str(current_val) if current_val else "",
-                                key=field_key,
-                                placeholder="未填",
-                            )
+                for group in today_groups:
+                    if group["label"]:
+                        st.markdown(f'<p class="group-label">{group["label"]}</p>', unsafe_allow_html=True)
+                    fields = group["fields"]
+                    cols = st.columns(min(4, max(1, len(fields))))
+                    for i, f in enumerate(fields):
+                        with cols[i % min(4, max(1, len(fields)))]:
+                            current_val = daily_card.get(f["key"]) if daily_card else None
+                            render_field_input(dim["key"], f, current_val)
 
             # 昨日结果
             if dim["yesterday_fields"]:
                 st.markdown("##### 🌙 昨日结果")
                 cols = st.columns(min(4, len(dim["yesterday_fields"])))
                 for i, f in enumerate(dim["yesterday_fields"]):
-                    with cols[i % 4]:
-                        field_key = f"{dim['key']}_{f['key']}"
+                    with cols[i % min(4, len(dim["yesterday_fields"]))]:
                         current_val = daily_card.get(f["key"]) if daily_card else None
+                        render_field_input(dim["key"], f, current_val)
 
-                        if f["type"] == "number":
-                            val = st.number_input(
-                                f["label"],
-                                value=float(current_val) if current_val is not None else None,
-                                step=f.get("step", 1.0),
-                                format=f"%.{len(str(f.get('step',1)).split('.')[-1])}f" if '.' in str(f.get('step',1)) else "%g",
-                                key=field_key,
-                                placeholder="未填",
-                            )
-                            show_critical(f["key"], val)
-                        else:
-                            val = st.text_input(
-                                f["label"],
-                                value=str(current_val) if current_val else "",
-                                key=field_key,
-                                placeholder="未填",
-                            )
     # 自动计算显示
     st.divider()
     st.subheader("🔢 自动计算")
 
-    # 从 session_state 读取当前输入值
-    bp_sys = st.session_state.get("circulation_bp_sys")
-    bp_dia = st.session_state.get("circulation_bp_dia")
-    pao2 = st.session_state.get("circulation_abg_pao2")
-    fio2 = st.session_state.get("respiration_vent_fio2")
-    intake = st.session_state.get("circulation_intake_vol")
-    output = st.session_state.get("circulation_output_vol")
+    bp_sys = get_field_val("bp_sys")
+    bp_dia = get_field_val("bp_dia")
+    pao2 = get_field_val("abg_pao2")
+    fio2 = get_field_val("vent_fio2")
+    intake = get_field_val("intake_vol")
+    output = get_field_val("output_vol")
 
     map_val = calc_map(bp_sys, bp_dia)
     oi_val = calc_oi(pao2, fio2)
@@ -164,11 +173,9 @@ with left_col:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("MAP", f"{map_val} mmHg" if map_val else "—",
-                  delta="计算中" if bp_sys and bp_dia and not map_val else None)
+        st.metric("MAP", f"{map_val} mmHg" if map_val else "—")
     with col2:
-        st.metric("氧合指数", f"{oi_val}" if oi_val else "—",
-                  delta="需FiO₂" if pao2 and not fio2 else None)
+        st.metric("氧合指数", f"{oi_val}" if oi_val else "—")
     with col3:
         bal_display = f"{balance_val:+.0f} mL" if balance_val is not None else "—"
         st.metric("出入量平衡", bal_display)
@@ -190,17 +197,7 @@ with right_col:
             from prompts.prompt_builder import build_system_prompt, build_report_prompt
             from core.deepseek_client import chat_stream
 
-            # 先保存当前输入
-            save_data = {}
-            for dim in DIMENSIONS:
-                for f in dim["today_fields"]:
-                    key = f"{dim['key']}_{f['key']}"
-                    if key in st.session_state:
-                        save_data[f["key"]] = st.session_state[key]
-                for f in dim["yesterday_fields"]:
-                    key = f"{dim['key']}_{f['key']}"
-                    if key in st.session_state:
-                        save_data[f["key"]] = st.session_state[key]
+            save_data = collect_save_data()
             if save_data:
                 daily_card = card_db.save(selected_id, data_date_str, save_data)
             else:
@@ -241,7 +238,6 @@ with right_col:
         st.session_state["report_content"] = content
         st.session_state["report_stream"] = None
 
-        # 操作按钮
         col1, col2 = st.columns(2)
         with col1:
             st.download_button(
@@ -267,6 +263,6 @@ with right_col:
     else:
         output_placeholder.info("点击「生成今日汇报」开始 AI 分析")
 
-# --- 底部：信息缺口清单可视化 ---
+# --- 底部 ---
 st.divider()
 st.caption(f"💡 提示：所有数据保存在本地 SQLite，AI 调用仅发送脱敏后的临床文本。当前患者：{patient['name_abbr']} | 日期：{data_date_str}")

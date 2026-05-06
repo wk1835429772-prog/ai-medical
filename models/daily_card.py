@@ -31,7 +31,7 @@ def save(patient_id: str, data_date: str, data: dict) -> dict:
         "bp_sys", "bp_dia", "hr", "spo2", "intake_vol", "output_vol", "stool_vol",
         "abg_ph", "abg_pao2", "abg_paco2", "abg_hco3", "abg_lac",
         "echo_result", "ecg_result", "cardiac_markers", "bnp",
-        "vent_mode", "vent_fio2", "vent_peep", "sputum_char",
+        "vent_mode", "vent_fio2", "vent_peep", "sputum_char", "rr",
         "chest_xray", "lung_us",
         "temp",
         "wbc", "neut_pct", "pct", "il6", "pathogen_result",

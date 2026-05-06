@@ -2,7 +2,7 @@
 
 # 应用信息
 APP_NAME = "临床助手"
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 
 # DeepSeek API 配置
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -13,6 +13,13 @@ DEEPSEEK_MAX_TOKENS = 4096
 # 数据库
 DB_PATH = "data/app.db"
 
+
+def _build_groups(dim):
+    """为 today_fields 构建默认分组（如果未显式定义 today_groups）"""
+    if "today_groups" not in dim and dim["today_fields"]:
+        dim["today_groups"] = [{"label": "", "fields": dim["today_fields"]}]
+
+
 # 七维框架定义
 DIMENSIONS = [
     {
@@ -20,18 +27,34 @@ DIMENSIONS = [
         "name": "循环",
         "icon": "❤️",
         "today_fields": [
+            # 生命体征
             {"key": "bp_sys", "label": "收缩压 (mmHg)", "type": "number", "step": 1},
             {"key": "bp_dia", "label": "舒张压 (mmHg)", "type": "number", "step": 1},
             {"key": "hr", "label": "心率 (bpm)", "type": "number", "step": 1},
             {"key": "spo2", "label": "SpO₂ (%)", "type": "number", "step": 1},
+            # 出入量
             {"key": "intake_vol", "label": "总入量 (mL)", "type": "number", "step": 50},
             {"key": "output_vol", "label": "总出量 (mL)", "type": "number", "step": 50},
             {"key": "stool_vol", "label": "大便量 (mL)", "type": "number", "step": 50},
-            {"key": "abg_ph", "label": "pH", "type": "number", "step": 0.01},
-            {"key": "abg_pao2", "label": "PaO₂ (mmHg)", "type": "number", "step": 0.1},
-            {"key": "abg_paco2", "label": "PaCO₂ (mmHg)", "type": "number", "step": 0.1},
-            {"key": "abg_hco3", "label": "HCO₃⁻ (mmol/L)", "type": "number", "step": 0.1},
-            {"key": "abg_lac", "label": "乳酸 (mmol/L)", "type": "number", "step": 0.1},
+        ],
+        "today_groups": [
+            {
+                "label": "生命体征",
+                "fields": [
+                    {"key": "bp_sys", "label": "收缩压 (mmHg)", "type": "number", "step": 1},
+                    {"key": "bp_dia", "label": "舒张压 (mmHg)", "type": "number", "step": 1},
+                    {"key": "hr", "label": "心率 (bpm)", "type": "number", "step": 1},
+                    {"key": "spo2", "label": "SpO₂ (%)", "type": "number", "step": 1},
+                ],
+            },
+            {
+                "label": "出入量",
+                "fields": [
+                    {"key": "intake_vol", "label": "总入量 (mL)", "type": "number", "step": 50},
+                    {"key": "output_vol", "label": "总出量 (mL)", "type": "number", "step": 50},
+                    {"key": "stool_vol", "label": "大便量 (mL)", "type": "number", "step": 50},
+                ],
+            },
         ],
         "yesterday_fields": [
             {"key": "echo_result", "label": "心超结果", "type": "text"},
@@ -42,13 +65,49 @@ DIMENSIONS = [
     },
     {
         "key": "respiration",
-        "name": "呼吸",
+        "name": "呼吸 / 酸碱",
         "icon": "🫁",
         "today_fields": [
+            # 血气分析（从循环维度迁入）
+            {"key": "abg_ph", "label": "pH", "type": "number", "step": 0.01},
+            {"key": "abg_pao2", "label": "PaO₂ (mmHg)", "type": "number", "step": 0.1},
+            {"key": "abg_paco2", "label": "PaCO₂ (mmHg)", "type": "number", "step": 0.1},
+            {"key": "abg_hco3", "label": "HCO₃⁻ (mmol/L)", "type": "number", "step": 0.1},
+            {"key": "abg_lac", "label": "乳酸 (mmol/L)", "type": "number", "step": 0.1},
+            # 呼吸支持
             {"key": "vent_mode", "label": "呼吸机模式", "type": "text"},
             {"key": "vent_fio2", "label": "FiO₂ (%)", "type": "number", "step": 5},
             {"key": "vent_peep", "label": "PEEP (cmH₂O)", "type": "number", "step": 1},
             {"key": "sputum_char", "label": "痰液性状", "type": "text"},
+            # 呼吸频率
+            {"key": "rr", "label": "RR (bpm)", "type": "number", "step": 1},
+        ],
+        "today_groups": [
+            {
+                "label": "血气分析",
+                "fields": [
+                    {"key": "abg_ph", "label": "pH", "type": "number", "step": 0.01},
+                    {"key": "abg_pao2", "label": "PaO₂ (mmHg)", "type": "number", "step": 0.1},
+                    {"key": "abg_paco2", "label": "PaCO₂ (mmHg)", "type": "number", "step": 0.1},
+                    {"key": "abg_hco3", "label": "HCO₃⁻ (mmol/L)", "type": "number", "step": 0.1},
+                    {"key": "abg_lac", "label": "乳酸 (mmol/L)", "type": "number", "step": 0.1},
+                ],
+            },
+            {
+                "label": "呼吸支持",
+                "fields": [
+                    {"key": "vent_mode", "label": "呼吸机模式", "type": "text"},
+                    {"key": "vent_fio2", "label": "FiO₂ (%)", "type": "number", "step": 5},
+                    {"key": "vent_peep", "label": "PEEP (cmH₂O)", "type": "number", "step": 1},
+                    {"key": "sputum_char", "label": "痰液性状", "type": "text"},
+                ],
+            },
+            {
+                "label": "呼吸频率",
+                "fields": [
+                    {"key": "rr", "label": "RR (bpm)", "type": "number", "step": 1},
+                ],
+            },
         ],
         "yesterday_fields": [
             {"key": "chest_xray", "label": "胸片结果", "type": "text"},
@@ -123,6 +182,10 @@ DIMENSIONS = [
         ],
     },
 ]
+
+# 为未显式定义 today_groups 的维度自动生成默认分组
+for _dim in DIMENSIONS:
+    _build_groups(_dim)
 
 # 危急值阈值
 CRITICAL_THRESHOLDS = {
