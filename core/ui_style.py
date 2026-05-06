@@ -8,6 +8,9 @@ def inject_global_css():
     st.markdown("""
 <style>
 /* === 全局基础 === */
+.block-container {
+    padding-top: 2.5rem !important;
+}
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #f0f7ff 0%, #f8f9fa 100%);
     border-right: 1px solid #e0e6ed;

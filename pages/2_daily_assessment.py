@@ -1,8 +1,7 @@
-"""今日评估页面 - 核心：生命体征概览 + 七维日卡 + 治疗方案 + AI 对话"""
+"""今日评估页面 - 核心：生命体征概览 + 七维日卡 + 治疗方案 + AI 汇报"""
 
 import streamlit as st
 from datetime import date, timedelta
-import base64
 
 from core.database import init_database
 init_database()
@@ -10,18 +9,11 @@ init_database()
 from config import DIMENSIONS
 import models.patient as patient_db
 import models.daily_card as card_db
-import models.chat_message as chat_db
 from core.calculator import calc_map, calc_oi, calc_balance, calc_postop_days, check_critical
 
 st.set_page_config(page_title="今日评估 - 临床助手", page_icon="📝", layout="wide")
 from core.ui_style import inject_global_css
 inject_global_css()
-
-# ─── Session state defaults ───
-if "current_conv_id" not in st.session_state:
-    st.session_state.current_conv_id = None
-if "chat_image" not in st.session_state:
-    st.session_state.chat_image = None
 
 # ─── Helper functions ───
 
@@ -304,38 +296,10 @@ with left_col:
     )
 
 # ══════════════════════════════════════════════
-# 右栏：AI 对话面板
+# 右栏：AI 汇报
 # ══════════════════════════════════════════════
 with right_col:
-    st.subheader("🤖 AI 对话")
-
-    # 对话管理
-    convs = chat_db.get_conversations(selected_id)
-    conv_map = {c["conversation_id"]: c for c in convs}
-
-    c1, c2, c3 = st.columns([3, 1, 1])
-    with c1:
-        conv_options = [None] + [c["conversation_id"] for c in convs]
-        conv_labels = {None: "➕ 新对话"}
-        for c in convs:
-            title = c.get("title", "新对话") or "新对话"
-            conv_labels[c["conversation_id"]] = (title[:30] + "...") if len(title) > 30 else title
-        sel_conv = st.selectbox(
-            "对话",
-            options=conv_options,
-            format_func=lambda x: conv_labels.get(x, "新对话"),
-            key="conv_selector",
-            label_visibility="collapsed",
-        )
-    with c2:
-        if st.button("➕", help="新建对话"):
-            st.session_state.current_conv_id = None
-            st.rerun()
-    with c3:
-        if sel_conv and st.button("🗑️", help="删除此对话"):
-            chat_db.delete_conversation(selected_id, sel_conv)
-            st.session_state.current_conv_id = None
-            st.rerun()
+    st.subheader("🤖 AI 汇报")
 
     # 模型选择
     report_model = st.radio(
@@ -345,100 +309,77 @@ with right_col:
         index=0,
     )
 
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📋 生成今日汇报", type="primary", use_container_width=True):
+            from prompts.prompt_builder import build_system_prompt, build_report_prompt
+            from core.deepseek_client import chat_stream
+
+            save_data = collect_save_data()
+            if save_data:
+                daily_card = card_db.save(selected_id, data_date_str, save_data)
+            else:
+                daily_card = card_db.get_or_create(selected_id, data_date_str)
+
+            system_prompt = build_system_prompt(include_rules=True)
+            user_prompt = build_report_prompt(patient, daily_card)
+
+            st.session_state["report_stream"] = chat_stream(system_prompt, user_prompt, report_model)
+            st.session_state["report_content"] = ""
+
+    with col2:
+        if st.button("🔄 生成交班报告", use_container_width=True):
+            from prompts.prompt_builder import build_system_prompt, build_patient_context
+            from core.deepseek_client import chat_stream
+
+            daily_card_data = card_db.get_or_create(selected_id, data_date_str)
+            ctx = build_patient_context(patient, daily_card_data)
+            user_prompt = f"请根据以下患者信息生成规范的交班报告：\n\n{ctx}"
+            system_prompt = build_system_prompt(include_rules=True)
+            st.session_state["report_stream"] = chat_stream(system_prompt, user_prompt, report_model)
+            st.session_state["report_content"] = ""
+
     st.divider()
 
-    # 消息历史
-    if sel_conv:
-        st.session_state.current_conv_id = sel_conv
-        messages = chat_db.get_messages(selected_id, sel_conv)
-        for msg in messages:
-            with st.chat_message(msg["role"]):
-                if msg.get("image_data"):
-                    st.image(base64.b64decode(msg["image_data"]), width=300)
-                if msg.get("content"):
-                    st.markdown(msg["content"])
+    # 流式输出面板
+    if "report_content" not in st.session_state:
+        st.session_state["report_content"] = ""
+
+    output_placeholder = st.empty()
+
+    if "report_stream" in st.session_state and st.session_state["report_stream"]:
+        report_iter = st.session_state["report_stream"]
+        content = ""
+        for chunk in report_iter:
+            content += chunk
+            output_placeholder.markdown(content)
+        st.session_state["report_content"] = content
+        st.session_state["report_stream"] = None
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                "📥 下载汇报",
+                content,
+                file_name=f"report_{patient['name_abbr']}_{data_date_str}.txt",
+                mime="text/plain",
+            )
+        with col2:
+            if st.button("📋 一键复制"):
+                st.code(content, language=None)
+                st.success("已显示纯文本格式，可手动复制")
+    elif st.session_state["report_content"]:
+        output_placeholder.markdown(st.session_state["report_content"])
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                "📥 下载汇报",
+                st.session_state["report_content"],
+                file_name=f"report_{patient['name_abbr']}_{data_date_str}.txt",
+                mime="text/plain",
+            )
     else:
-        st.session_state.current_conv_id = None
-        st.info("输入问题开始新对话，AI 将自动关联当前患者数据。")
-
-    # 图片/语音上传区
-    upload_cols = st.columns(2)
-    with upload_cols[0]:
-        uploaded_img = st.file_uploader("📷 上传图片", type=["jpg", "jpeg", "png", "webp"], key="chat_img_upload")
-    with upload_cols[1]:
-        audio_bytes = None
-        try:
-            audio_rec = st.audio_input("🎤 语音输入", key="chat_voice")
-            if audio_rec:
-                audio_bytes = audio_rec.getvalue()
-        except AttributeError:
-            audio_file = st.file_uploader("🎤 上传音频", type=["wav", "mp3", "m4a"], key="chat_audio_upload")
-            if audio_file:
-                audio_bytes = audio_file.getvalue()
-
-    # 处理图片上传
-    if uploaded_img:
-        img_bytes = uploaded_img.getvalue()
-        st.session_state.chat_image = base64.b64encode(img_bytes).decode()
-        st.image(img_bytes, caption="待发送图片", width=200)
-
-    # 聊天输入
-    if prompt := st.chat_input("输入问题..."):
-        # 自动创建新对话
-        if not sel_conv:
-            conv_id = chat_db.new_conversation_id()
-            st.session_state.current_conv_id = conv_id
-        else:
-            conv_id = sel_conv
-
-        # 准备图片
-        image_b64 = st.session_state.chat_image if st.session_state.chat_image else ""
-
-        # 保存用户消息
-        chat_db.create(selected_id, conv_id, "user", prompt, image_data=image_b64, model_used=report_model)
-
-        # 构建 system prompt
-        from prompts.prompt_builder import build_system_prompt, build_patient_context
-
-        daily_card_data = card_db.get_or_create(selected_id, data_date_str)
-        patient_ctx = build_patient_context(patient, daily_card_data)
-        system_prompt = build_system_prompt(include_rules=True)
-        system_prompt += f"\n\n{patient_ctx}"
-
-        # 加载对话历史
-        all_msgs = chat_db.get_messages(selected_id, conv_id)
-        api_messages = []
-        for m in all_msgs:
-            if m["role"] in ("user", "assistant"):
-                api_messages.append({"role": m["role"], "content": m["content"]})
-
-        # 调用 API
-        from core.deepseek_client import chat_stream, chat_vision_stream
-
-        st.session_state.chat_image = None
-
-        with st.chat_message("user"):
-            if image_b64:
-                st.image(base64.b64decode(image_b64), width=200)
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
-            placeholder = st.empty()
-            full_response = ""
-
-            if image_b64:
-                stream = chat_vision_stream(system_prompt, prompt, image_b64, model=report_model)
-            else:
-                stream = chat_stream(system_prompt, messages=api_messages, model=report_model)
-
-            for chunk in stream:
-                full_response += chunk
-                placeholder.markdown(full_response + "▌")
-            placeholder.markdown(full_response)
-
-        # 保存 assistant 回复
-        chat_db.create(selected_id, conv_id, "assistant", full_response, model_used=report_model)
-        st.rerun()
+        output_placeholder.info("点击「生成今日汇报」开始 AI 分析")
 
 # ─── 底部 ───
 st.divider()
