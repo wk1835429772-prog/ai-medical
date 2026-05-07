@@ -268,4 +268,19 @@ def _format_rounds(info: dict, card: dict) -> str:
 
 # ─── 启动 ───
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    import argparse
+    parser = argparse.ArgumentParser(description="临床查房 MCP 服务器")
+    parser.add_argument(
+        "--transport", choices=["stdio", "sse"], default="stdio",
+        help="传输方式: stdio(命令行调试) / sse(RikkaHub/网络)"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000,
+        help="SSE 模式端口号 (默认 8000)"
+    )
+    parser.add_argument(
+        "--host", default="0.0.0.0",
+        help="SSE 模式绑定地址 (默认 0.0.0.0，允许局域网访问)"
+    )
+    args = parser.parse_args()
+    mcp.run(transport=args.transport, host=args.host, port=args.port)
