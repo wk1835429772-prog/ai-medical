@@ -115,8 +115,33 @@ const TOOLS = [
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const apiKey = req.headers.get("x-api-key") || "";
+
+  // ─── GET: MCP 服务器发现（不需要 auth） ───
+  if (req.method === "GET") {
+    const action = url.searchParams.get("action") || "";
+    if (action) {
+      if (apiKey !== ANON_KEY) return new Response("Unauthorized", { status: 401 });
+      const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { patients, cardMap } = await getData(supabase);
+      let result = "";
+      const bed = url.searchParams.get("bed") || "";
+      if (action === "patient_list") result = getPatientList(patients);
+      else if (action === "rounds_by_bed" && bed) result = getRoundByBed(patients, cardMap, bed);
+      else if (action === "rounds_all") result = getRoundsAll(patients, cardMap);
+      else if (action === "abnormal_flags") result = getAbnormalFlags(patients, cardMap);
+      else result = "actions: patient_list | rounds_by_bed&bed=N | rounds_all | abnormal_flags";
+      return new Response(result, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
+    return new Response(JSON.stringify({
+      protocolVersion: "2024-11-05",
+      capabilities: { tools: {} },
+      serverInfo: { name: "clinical-rounds", version: "1.0" },
+    }), { headers: { "Content-Type": "application/json" } });
+  }
+
+  // ─── POST: MCP JSON-RPC ───
   if (apiKey !== ANON_KEY) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401,
+    return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized: add x-api-key header" } }), { status: 401,
       headers: { "Content-Type": "application/json" } });
   }
 
@@ -125,7 +150,6 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // ─── MCP JSON-RPC ───
   if (req.method === "POST") {
     const body = await req.json();
     const { method, id, params } = body;
@@ -140,6 +164,21 @@ Deno.serve(async (req: Request) => {
 
     if (method === "notifications/initialized") {
       return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: {} }),
+        { headers: { "Content-Type": "application/json" } });
+    }
+
+    if (method === "ping") {
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: {} }),
+        { headers: { "Content-Type": "application/json" } });
+    }
+
+    if (method === "resources/list") {
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: { resources: [] } }),
+        { headers: { "Content-Type": "application/json" } });
+    }
+
+    if (method === "prompts/list") {
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: { prompts: [] } }),
         { headers: { "Content-Type": "application/json" } });
     }
 
@@ -167,15 +206,5 @@ Deno.serve(async (req: Request) => {
       { headers: { "Content-Type": "application/json" } });
   }
 
-  // ─── Legacy GET API ───
-  const action = url.searchParams.get("action") || "";
-  const bed = url.searchParams.get("bed") || "";
-  const { patients, cardMap } = await getData(supabase);
-  let result = "";
-  if (action === "patient_list") result = getPatientList(patients);
-  else if (action === "rounds_by_bed" && bed) result = getRoundByBed(patients, cardMap, bed);
-  else if (action === "rounds_all") result = getRoundsAll(patients, cardMap);
-  else if (action === "abnormal_flags") result = getAbnormalFlags(patients, cardMap);
-  else result = "actions: patient_list | rounds_by_bed&bed=N | rounds_all | abnormal_flags";
-  return new Response(result, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Use POST with JSON-RPC" } }), { headers: { "Content-Type": "application/json" } });
 });
