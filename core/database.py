@@ -95,10 +95,14 @@ def _get_sqlite_connection():
 def _get_pg_connection():
     try:
         import psycopg2
+        import psycopg2.extras
     except ImportError:
         raise ImportError("PostgreSQL 后端需要 psycopg2-binary：pip install psycopg2-binary")
     url = _get_supabase_url()
-    conn = psycopg2.connect(url)
+    # Supabase 强制要求 SSL，连接超时 30s
+    if "sslmode" not in url:
+        url = url + ("&" if "?" in url else "?") + "sslmode=require"
+    conn = psycopg2.connect(url, connect_timeout=30)
     conn.autocommit = False
     return PgConnection(conn)
 
