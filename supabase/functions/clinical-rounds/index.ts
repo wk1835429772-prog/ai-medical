@@ -114,15 +114,9 @@ const TOOLS = [
 // ─── 入口 ───
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
-  const auth = req.headers.get("Authorization") || "";
-  // 兼容 anon key 作为 API key
-  const apikey = req.headers.get("apikey") || "";
-  const authToken = auth.replace("Bearer ", "").replace("bearer ", "");
-  const valid = authToken === ANON_KEY || apikey === ANON_KEY ||
-    authToken === ANON_KEY.replace("sb_publishable_", "") ||
-    apikey === ANON_KEY.replace("sb_publishable_", "");
-  if (!valid) {
-    return new Response(JSON.stringify({ error: "Unauthorized", got: auth.substring(0, 50) }), { status: 401,
+  const apiKey = req.headers.get("x-api-key") || "";
+  if (apiKey !== ANON_KEY) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401,
       headers: { "Content-Type": "application/json" } });
   }
 
