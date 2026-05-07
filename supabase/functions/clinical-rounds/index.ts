@@ -156,7 +156,6 @@ Deno.serve(async (req: Request) => {
   if (apiKey !== ANON_KEY) {
     return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "Unauthorized: add x-api-key header" } }), { status: 401,
       headers: jsonHeaders });
-      headers: { "Content-Type": "application/json" } });
   }
 
   const supabase = createClient(
