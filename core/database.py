@@ -15,45 +15,65 @@ _local = threading.local()
 
 def _get_cached_sqlite():
     """同一请求内复用 SQLite 连接"""
-    if not hasattr(_local, "sqlite_conn") or _local.sqlite_conn is None:
+    conn = getattr(_local, "sqlite_conn", None)
+    if conn is None:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         _local.sqlite_conn = conn
-    return _local.sqlite_conn
+    return conn
+
+
+class _PgRef:
+    """包装 PgConnection，close 后自动重建"""
+    def __init__(self):
+        self._conn = None
+
+    def get(self):
+        if self._conn is None:
+            import pg8000.dbapi
+            url_str = _get_supabase_url()
+            parsed = urlparse(url_str)
+            raw = pg8000.dbapi.connect(
+                user=parsed.username or "postgres",
+                password=parsed.password or "",
+                host=parsed.hostname or "localhost",
+                port=parsed.port or 5432,
+                database=parsed.path.lstrip("/") if parsed.path else "postgres",
+                timeout=30,
+            )
+            self._conn = PgConnection(raw)
+        return self._conn
+
+    def close(self):
+        if self._conn:
+            self._conn.close()
+        self._conn = None
+
 
 def _get_cached_pg():
     """同一请求内复用 pg8000 连接"""
-    if not hasattr(_local, "pg_conn") or _local.pg_conn is None:
-        import pg8000.dbapi
-        url_str = _get_supabase_url()
-        parsed = urlparse(url_str)
-        conn = pg8000.dbapi.connect(
-            user=parsed.username or "postgres",
-            password=parsed.password or "",
-            host=parsed.hostname or "localhost",
-            port=parsed.port or 5432,
-            database=parsed.path.lstrip("/") if parsed.path else "postgres",
-            timeout=30,
-        )
-        _local.pg_conn = PgConnection(conn)
-    return _local.pg_conn
+    ref = getattr(_local, "pg_ref", None)
+    if ref is None:
+        ref = _PgRef()
+        _local.pg_ref = ref
+    return ref.get()
 
 def close_connections():
     """关闭请求内的所有连接（Streamlit session 结束时调用）"""
-    for attr in ("sqlite_conn", "pg_conn"):
-        conn = getattr(_local, attr, None)
-        if conn:
-            try:
-                conn.close()
-            except Exception:
-                pass
+    ref = getattr(_local, "pg_ref", None)
+    if ref:
+        ref.close()
+        _local.pg_ref = None
+    conn = getattr(_local, "sqlite_conn", None)
+    if conn:
         try:
-            delattr(_local, attr)
+            conn.close()
         except Exception:
             pass
+        _local.sqlite_conn = None
 
 # ─── 后端检测 ───
 def _get_supabase_url() -> str:
