@@ -6,6 +6,8 @@ ICU 查房助手，通过 Supabase Edge Function 获取患者数据，按七维�
 
 `https://raqukmcgcohmlshhkfym.supabase.co/functions/v1/clinical-rounds`
 
+请求头：`Authorization: Bearer sb_publishable_g1XfDU9GH9z5zWiq3f4OBA_lUKaG0LW`
+
 ## 触发条件
 
 | 输入 | 动作 | API 调用 |
