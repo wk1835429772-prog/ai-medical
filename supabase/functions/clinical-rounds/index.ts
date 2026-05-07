@@ -115,10 +115,13 @@ const TOOLS = [
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const apiKey = req.headers.get("x-api-key") || "";
-  const jsonHeaders = {
+  const sessionId = "mcp-session";
+  const jsonHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "content-type, x-api-key",
+    "Access-Control-Allow-Headers": "content-type, x-api-key, mcp-session-id",
+    "Access-Control-Expose-Headers": "mcp-session-id",
+    "Mcp-Session-Id": sessionId,
   };
 
   // ─── CORS preflight ───
