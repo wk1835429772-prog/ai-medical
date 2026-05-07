@@ -3,11 +3,57 @@
 import sqlite3
 import os
 import shutil
+import threading
 from datetime import datetime
 from urllib.parse import urlparse
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "app.db")
 BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "backups")
+
+# ─── 连接复用（同一请求内不重复建连） ───
+_local = threading.local()
+
+def _get_cached_sqlite():
+    """同一请求内复用 SQLite 连接"""
+    if not hasattr(_local, "sqlite_conn") or _local.sqlite_conn is None:
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        _local.sqlite_conn = conn
+    return _local.sqlite_conn
+
+def _get_cached_pg():
+    """同一请求内复用 pg8000 连接"""
+    if not hasattr(_local, "pg_conn") or _local.pg_conn is None:
+        import pg8000.dbapi
+        url_str = _get_supabase_url()
+        parsed = urlparse(url_str)
+        conn = pg8000.dbapi.connect(
+            user=parsed.username or "postgres",
+            password=parsed.password or "",
+            host=parsed.hostname or "localhost",
+            port=parsed.port or 5432,
+            database=parsed.path.lstrip("/") if parsed.path else "postgres",
+            timeout=30,
+        )
+        _local.pg_conn = PgConnection(conn)
+    return _local.pg_conn
+
+def close_connections():
+    """关闭请求内的所有连接（Streamlit session 结束时调用）"""
+    for attr in ("sqlite_conn", "pg_conn"):
+        conn = getattr(_local, attr, None)
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        try:
+            delattr(_local, attr)
+        except Exception:
+            pass
 
 # ─── 后端检测 ───
 def _get_supabase_url() -> str:
@@ -92,10 +138,10 @@ class PgConnection:
 
 # ─── 连接获取 ───
 def get_connection():
-    """获取数据库连接（自动选择 SQLite 或 PostgreSQL）"""
+    """获取数据库连接（同一请求内复用，自动选择后端）"""
     if USE_SUPABASE:
-        return _get_pg_connection()
-    return _get_sqlite_connection()
+        return _get_cached_pg()
+    return _get_cached_sqlite()
 
 
 def _get_sqlite_connection():
@@ -128,11 +174,17 @@ def _get_pg_connection():
 
 
 # ─── 初始化 ───
+_init_cache = {}
+
 def init_database():
+    """初始化数据库（连接复用缓存）"""
+    if _init_cache.get("done"):
+        return
     if USE_SUPABASE:
         _init_pg()
     else:
         _init_sqlite()
+    _init_cache["done"] = True
 
 
 def _init_sqlite():
