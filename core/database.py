@@ -124,9 +124,29 @@ def _get_pg_connection():
 _init_cache = {}
 
 def init_database():
-    """初始化数据库（连接复用缓存）"""
+    """初始化数据库"""
+    # 迁移：bed_number 列（始终执行，绕过缓存）
+    _migrate_bed_number()
     if _init_cache.get("done"):
         return
+
+
+def _migrate_bed_number():
+    """确保 patients 表有 bed_number 列"""
+    try:
+        conn = get_connection()
+        if USE_SUPABASE:
+            conn.execute(
+                "ALTER TABLE patients ADD COLUMN IF NOT EXISTS bed_number TEXT DEFAULT ''"
+            )
+        else:
+            pc = {row[1] for row in conn.execute("PRAGMA table_info(patients)").fetchall()}
+            if "bed_number" not in pc:
+                conn.execute("ALTER TABLE patients ADD COLUMN bed_number TEXT DEFAULT ''")
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
     if USE_SUPABASE:
         _init_pg()
     else:
@@ -255,25 +275,12 @@ def _init_sqlite():
     except Exception:
         pass
 
-    # 迁移：bed_number 列
-    pc = {row[1] for row in cursor.execute("PRAGMA table_info(patients)").fetchall()}
-    if "bed_number" not in pc:
-        cursor.execute("ALTER TABLE patients ADD COLUMN bed_number TEXT DEFAULT ''")
-        conn.commit()
-
     _seed_default_rules()
 
 
 def _init_pg():
     """PostgreSQL/Supabase 初始化"""
     conn = get_connection()
-
-    # 添加 bed_number 列（兼容旧表）
-    try:
-        conn.execute("ALTER TABLE patients ADD COLUMN IF NOT EXISTS bed_number TEXT DEFAULT ''")
-        conn.commit()
-    except Exception:
-        pass
 
     tables_sql = """
         CREATE TABLE IF NOT EXISTS patients (
