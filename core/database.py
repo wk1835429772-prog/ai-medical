@@ -3,11 +3,49 @@
 import sqlite3
 import os
 import shutil
+import threading
 from datetime import datetime
 from urllib.parse import urlparse
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "app.db")
 BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "backups")
+
+# ─── 连接复用（每线程缓存，execute 每次新 cursor） ───
+_local = threading.local()
+
+
+def get_connection():
+    """获取数据库连接（线程内复用）"""
+    if USE_SUPABASE:
+        conn = getattr(_local, "pg", None)
+        if conn is None:
+            import pg8000.dbapi
+            url_str = _get_supabase_url()
+            parsed = urlparse(url_str)
+            raw = pg8000.dbapi.connect(
+                user=parsed.username or "postgres",
+                password=parsed.password or "",
+                host=parsed.hostname or "localhost",
+                port=parsed.port or 5432,
+                database=parsed.path.lstrip("/") if parsed.path else "postgres",
+                timeout=30,
+            )
+            conn = PgConnection(raw)
+            _local.pg = conn
+        return conn
+    else:
+        conn = getattr(_local, "sq", None)
+        if conn is None:
+            os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            _close = conn.close
+            conn.close = lambda: (_close(), setattr(_local, "sq", None))
+            _local.sq = conn
+        return conn
+
 
 # ─── 后端检测 ───
 def _get_supabase_url() -> str:
@@ -80,44 +118,12 @@ class PgConnection:
             self._conn.close()
         except Exception:
             pass
+        _local.pg = None  # 清除缓存，下次会重建
 
     def cursor(self):
         return self._cursor
 
 
-# ─── 连接获取 ───
-def get_connection():
-    """获取数据库连接"""
-    if USE_SUPABASE:
-        return _get_pg_connection()
-    return _get_sqlite_connection()
-
-
-def _get_sqlite_connection():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
-
-
-def _get_pg_connection():
-    try:
-        import pg8000.dbapi
-    except ImportError:
-        raise ImportError("PostgreSQL 后端需要 pg8000：pip install pg8000")
-    url_str = _get_supabase_url()
-    parsed = urlparse(url_str)
-    conn = pg8000.dbapi.connect(
-        user=parsed.username or "postgres",
-        password=parsed.password or "",
-        host=parsed.hostname or "localhost",
-        port=parsed.port or 5432,
-        database=parsed.path.lstrip("/") if parsed.path else "postgres",
-        timeout=30,
-    )
-    return PgConnection(conn)
 
 
 # ─── 初始化 ───
