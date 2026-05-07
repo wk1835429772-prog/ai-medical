@@ -3,77 +3,11 @@
 import sqlite3
 import os
 import shutil
-import threading
 from datetime import datetime
 from urllib.parse import urlparse
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "app.db")
 BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "backups")
-
-# ─── 连接复用（同一请求内不重复建连） ───
-_local = threading.local()
-
-def _get_cached_sqlite():
-    """同一请求内复用 SQLite 连接"""
-    conn = getattr(_local, "sqlite_conn", None)
-    if conn is None:
-        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        _local.sqlite_conn = conn
-    return conn
-
-
-class _PgRef:
-    """包装 PgConnection，close 后自动重建"""
-    def __init__(self):
-        self._conn = None
-
-    def get(self):
-        if self._conn is None:
-            import pg8000.dbapi
-            url_str = _get_supabase_url()
-            parsed = urlparse(url_str)
-            raw = pg8000.dbapi.connect(
-                user=parsed.username or "postgres",
-                password=parsed.password or "",
-                host=parsed.hostname or "localhost",
-                port=parsed.port or 5432,
-                database=parsed.path.lstrip("/") if parsed.path else "postgres",
-                timeout=30,
-            )
-            self._conn = PgConnection(raw)
-        return self._conn
-
-    def close(self):
-        if self._conn:
-            self._conn.close()
-        self._conn = None
-
-
-def _get_cached_pg():
-    """同一请求内复用 pg8000 连接"""
-    ref = getattr(_local, "pg_ref", None)
-    if ref is None:
-        ref = _PgRef()
-        _local.pg_ref = ref
-    return ref.get()
-
-def close_connections():
-    """关闭请求内的所有连接（Streamlit session 结束时调用）"""
-    ref = getattr(_local, "pg_ref", None)
-    if ref:
-        ref.close()
-        _local.pg_ref = None
-    conn = getattr(_local, "sqlite_conn", None)
-    if conn:
-        try:
-            conn.close()
-        except Exception:
-            pass
-        _local.sqlite_conn = None
 
 # ─── 后端检测 ───
 def _get_supabase_url() -> str:
@@ -158,10 +92,10 @@ class PgConnection:
 
 # ─── 连接获取 ───
 def get_connection():
-    """获取数据库连接（同一请求内复用，自动选择后端）"""
+    """获取数据库连接"""
     if USE_SUPABASE:
-        return _get_cached_pg()
-    return _get_cached_sqlite()
+        return _get_pg_connection()
+    return _get_sqlite_connection()
 
 
 def _get_sqlite_connection():
@@ -180,15 +114,13 @@ def _get_pg_connection():
         raise ImportError("PostgreSQL 后端需要 pg8000：pip install pg8000")
     url_str = _get_supabase_url()
     parsed = urlparse(url_str)
-    user = parsed.username or "postgres"
-    password = parsed.password or ""
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 5432
-    database = parsed.path.lstrip("/") if parsed.path else "postgres"
-    # 尝试连接，默认 SSL
     conn = pg8000.dbapi.connect(
-        user=user, password=password, host=host, port=port,
-        database=database, timeout=30,
+        user=parsed.username or "postgres",
+        password=parsed.password or "",
+        host=parsed.hostname or "localhost",
+        port=parsed.port or 5432,
+        database=parsed.path.lstrip("/") if parsed.path else "postgres",
+        timeout=30,
     )
     return PgConnection(conn)
 
@@ -433,7 +365,6 @@ def _init_pg():
         except Exception:
             pass
 
-    conn.close()
     _seed_default_rules()
 
 
