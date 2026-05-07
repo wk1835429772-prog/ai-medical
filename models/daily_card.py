@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime
 from core.database import get_connection
+from core.database import auto_export_json as _auto_export
 
 
 def get_or_create(patient_id: str, data_date: str) -> dict:
@@ -70,6 +71,7 @@ def save(patient_id: str, data_date: str, data: dict) -> dict:
 
     conn.commit()
     conn.close()
+    _auto_export()
     return get_or_create(patient_id, data_date)
 
 

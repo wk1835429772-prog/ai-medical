@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime
 from core.database import get_connection
+from core.database import auto_export_json as _auto_export
 
 
 def create(data: dict) -> dict:
@@ -31,6 +32,7 @@ def create(data: dict) -> dict:
     )
     conn.commit()
     conn.close()
+    _auto_export()
     return get_by_id(patient_id)
 
 
@@ -77,6 +79,7 @@ def update(patient_id: str, data: dict) -> dict | None:
     conn.execute(f"UPDATE patients SET {', '.join(fields)} WHERE id = ?", values)
     conn.commit()
     conn.close()
+    _auto_export()
     return get_by_id(patient_id)
 
 
@@ -87,3 +90,4 @@ def delete(patient_id: str):
     conn.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
     conn.commit()
     conn.close()
+    _auto_export()

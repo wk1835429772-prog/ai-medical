@@ -1,4 +1,4 @@
-"""SQLite 数据库初始化和连接管理"""
+"""数据库连接管理 — 支持 SQLite（本地）和 PostgreSQL/Supabase（云端）双后端"""
 
 import sqlite3
 import os
@@ -8,9 +8,82 @@ from datetime import datetime
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "app.db")
 BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "backups")
 
+# ─── 后端检测 ───
+# 优先读 Streamlit secrets，其次读环境变量
+def _get_supabase_url() -> str:
+    url = os.environ.get("SUPABASE_URL", "")
+    if not url:
+        try:
+            import streamlit as st
+            url = st.secrets.get("SUPABASE_URL", "")
+        except Exception:
+            pass
+    return url
 
+USE_SUPABASE = bool(_get_supabase_url())
+
+
+# ─── PostgreSQL 兼容包装 ───
+class PgConnection:
+    """包装 psycopg2 连接，使行为与 sqlite3.Row 兼容（row["column"] 可用）"""
+
+    def __init__(self, conn):
+        try:
+            import psycopg2.extras
+            self._conn = conn
+            self._cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        except ImportError:
+            raise ImportError("PostgreSQL 后端需要 psycopg2-binary：pip install psycopg2-binary")
+
+    def execute(self, sql, params=None):
+        # ? 占位符 → %s（PostgreSQL 格式）
+        pg_sql = sql.replace("?", "%s")
+        self._cursor.execute(pg_sql, params or ())
+        return self
+
+    def executescript(self, script):
+        """逐条执行 SQL 脚本（PostgreSQL 不支持 executescript）"""
+        for stmt in script.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                self._cursor.execute(stmt)
+        return self
+
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        return dict(row) if row else None
+
+    def fetchall(self):
+        rows = self._cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        try:
+            self._cursor.close()
+        except Exception:
+            pass
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
+    # 兼容 cursor 属性（部分代码用 conn.cursor()）
+    def cursor(self):
+        return self._cursor
+
+
+# ─── 连接获取 ───
 def get_connection():
-    """获取数据库连接"""
+    """获取数据库连接（自动选择 SQLite 或 PostgreSQL）"""
+    if USE_SUPABASE:
+        return _get_pg_connection()
+    return _get_sqlite_connection()
+
+
+def _get_sqlite_connection():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -19,8 +92,28 @@ def get_connection():
     return conn
 
 
+def _get_pg_connection():
+    try:
+        import psycopg2
+    except ImportError:
+        raise ImportError("PostgreSQL 后端需要 psycopg2-binary：pip install psycopg2-binary")
+    url = _get_supabase_url()
+    conn = psycopg2.connect(url)
+    conn.autocommit = False
+    return PgConnection(conn)
+
+
+# ─── 初始化 ───
 def init_database():
-    """首次运行时自动建表"""
+    """首次运行时自动建表（自动选择 SQLite 或 PostgreSQL）"""
+    if USE_SUPABASE:
+        _init_pg()
+    else:
+        _init_sqlite()
+
+
+def _init_sqlite():
+    """SQLite 初始化"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -44,65 +137,26 @@ def init_database():
             id TEXT PRIMARY KEY,
             patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
             data_date TEXT NOT NULL,
-            -- 循环 - 今日
-            bp_sys REAL,
-            bp_dia REAL,
-            hr REAL,
-            spo2 REAL,
-            intake_vol REAL,
-            output_vol REAL,
-            stool_vol REAL,
-            abg_ph REAL,
-            abg_pao2 REAL,
-            abg_paco2 REAL,
-            abg_hco3 REAL,
-            abg_lac REAL,
-            -- 循环 - 昨日
-            echo_result TEXT DEFAULT '',
-            ecg_result TEXT DEFAULT '',
-            cardiac_markers TEXT DEFAULT '',
-            bnp REAL,
-            -- 呼吸 - 今日
-            vent_mode TEXT DEFAULT '',
-            vent_fio2 REAL,
-            vent_peep REAL,
+            bp_sys REAL, bp_dia REAL, hr REAL, spo2 REAL,
+            intake_vol REAL, output_vol REAL, stool_vol REAL,
+            abg_ph REAL, abg_pao2 REAL, abg_paco2 REAL, abg_hco3 REAL, abg_lac REAL,
+            echo_result TEXT DEFAULT '', ecg_result TEXT DEFAULT '',
+            cardiac_markers TEXT DEFAULT '', bnp REAL,
+            vent_mode TEXT DEFAULT '', vent_fio2 REAL, vent_peep REAL,
             sputum_char TEXT DEFAULT '',
-            -- 呼吸 - 昨日
-            chest_xray TEXT DEFAULT '',
-            lung_us TEXT DEFAULT '',
-            -- 感染 - 今日
+            chest_xray TEXT DEFAULT '', lung_us TEXT DEFAULT '',
             temp REAL,
-            -- 感染 - 昨日
-            wbc REAL,
-            neut_pct REAL,
-            pct REAL,
-            il6 REAL,
+            wbc REAL, neut_pct REAL, pct REAL, il6 REAL,
             pathogen_result TEXT DEFAULT '',
-            -- 脏器 - 今日
             urine_vol REAL,
-            -- 脏器 - 昨日
-            liver_func TEXT DEFAULT '',
-            renal_func TEXT DEFAULT '',
-            coagulation TEXT DEFAULT '',
-            electrolytes TEXT DEFAULT '',
+            liver_func TEXT DEFAULT '', renal_func TEXT DEFAULT '',
+            coagulation TEXT DEFAULT '', electrolytes TEXT DEFAULT '',
             ionized_ca REAL,
-            -- 原发病 - 今日
-            drain_vol REAL,
-            drain_char TEXT DEFAULT '',
-            wound_eval TEXT DEFAULT '',
-            -- 营养 - 今日
-            nutrition_route TEXT DEFAULT '',
-            enteral_vol REAL,
-            parenteral_vol REAL,
-            -- 营养 - 昨日
-            albumin REAL,
-            prealbumin REAL,
-            -- VTE - 今日
+            drain_vol REAL, drain_char TEXT DEFAULT '', wound_eval TEXT DEFAULT '',
+            nutrition_route TEXT DEFAULT '', enteral_vol REAL, parenteral_vol REAL,
+            albumin REAL, prealbumin REAL,
             vte_prophylaxis TEXT DEFAULT '',
-            -- VTE - 昨日
-            d_dimer REAL,
-            leg_us TEXT DEFAULT '',
-            -- 元数据
+            d_dimer REAL, leg_us TEXT DEFAULT '',
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             UNIQUE(patient_id, data_date)
@@ -129,10 +183,9 @@ def init_database():
         CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(name_abbr);
         CREATE INDEX IF NOT EXISTS idx_rules_active ON rules(is_active);
     """)
-
     conn.commit()
 
-    # 迁移：添加 rr 列（如果不存在）
+    # 迁移：添加 rr 列
     existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(daily_cards)").fetchall()}
     if "rr" not in existing_cols:
         cursor.execute("ALTER TABLE daily_cards ADD COLUMN rr REAL")
@@ -156,7 +209,7 @@ def init_database():
             cursor.execute(f"ALTER TABLE daily_cards ADD COLUMN {col} {col_type}")
     conn.commit()
 
-    # 迁移：chat_messages 表（使用独立连接，避免游标状态问题）
+    # chat_messages 表（独立连接）
     conn.commit()
     conn.close()
     try:
@@ -180,15 +233,162 @@ def init_database():
     except Exception:
         pass
 
-    backup_database()
     _seed_default_rules()
 
 
+def _init_pg():
+    """PostgreSQL/Supabase 初始化"""
+    conn = get_connection()
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS patients (
+            id TEXT PRIMARY KEY,
+            name_abbr TEXT NOT NULL,
+            age INTEGER,
+            gender TEXT DEFAULT '',
+            admission_date TEXT,
+            primary_diagnosis TEXT DEFAULT '',
+            surgery_type TEXT DEFAULT '',
+            surgery_date TEXT,
+            is_critical INTEGER DEFAULT 0,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS daily_cards (
+            id TEXT PRIMARY KEY,
+            patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            data_date TEXT NOT NULL,
+            bp_sys REAL, bp_dia REAL, hr REAL, spo2 REAL, rr REAL,
+            intake_vol REAL, output_vol REAL, stool_vol REAL,
+            abg_ph REAL, abg_pao2 REAL, abg_paco2 REAL, abg_hco3 REAL, abg_lac REAL,
+            echo_result TEXT DEFAULT '', ecg_result TEXT DEFAULT '',
+            cardiac_markers TEXT DEFAULT '', bnp REAL,
+            vent_mode TEXT DEFAULT '', vent_fio2 REAL, vent_peep REAL,
+            sputum_char TEXT DEFAULT '',
+            chest_xray TEXT DEFAULT '', lung_us TEXT DEFAULT '',
+            temp REAL,
+            wbc REAL, neut_pct REAL, pct REAL, il6 REAL,
+            pathogen_result TEXT DEFAULT '',
+            urine_vol REAL,
+            liver_func TEXT DEFAULT '', renal_func TEXT DEFAULT '',
+            coagulation TEXT DEFAULT '', electrolytes TEXT DEFAULT '',
+            ionized_ca REAL,
+            drain_vol REAL, drain_char TEXT DEFAULT '', wound_eval TEXT DEFAULT '',
+            nutrition_route TEXT DEFAULT '', enteral_vol REAL, parenteral_vol REAL,
+            albumin REAL, prealbumin REAL,
+            vte_prophylaxis TEXT DEFAULT '',
+            d_dimer REAL, leg_us TEXT DEFAULT '',
+            current_diagnosis TEXT DEFAULT '',
+            treatment_plan TEXT DEFAULT '',
+            circulation_notes TEXT DEFAULT '',
+            respiration_notes TEXT DEFAULT '',
+            infection_notes TEXT DEFAULT '',
+            organs_notes TEXT DEFAULT '',
+            primary_disease_notes TEXT DEFAULT '',
+            nutrition_notes TEXT DEFAULT '',
+            vte_notes TEXT DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(patient_id, data_date)
+        );
+
+        CREATE TABLE IF NOT EXISTS rules (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            category TEXT DEFAULT 'general',
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id TEXT PRIMARY KEY,
+            patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            conversation_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '',
+            image_data TEXT DEFAULT '',
+            model_used TEXT DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    conn.commit()
+
+    # 索引（单独执行，避免 executescript 事务问题）
+    for idx_sql in [
+        "CREATE INDEX IF NOT EXISTS idx_daily_cards_patient ON daily_cards(patient_id)",
+        "CREATE INDEX IF NOT EXISTS idx_daily_cards_date ON daily_cards(data_date)",
+        "CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(name_abbr)",
+        "CREATE INDEX IF NOT EXISTS idx_rules_active ON rules(is_active)",
+        "CREATE INDEX IF NOT EXISTS idx_chat_patient ON chat_messages(patient_id)",
+        "CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_messages(conversation_id)",
+    ]:
+        try:
+            conn.execute(idx_sql)
+            conn.commit()
+        except Exception:
+            conn.commit()  # 索引已存在时忽略
+
+    conn.close()
+    _seed_default_rules()
+
+
+# ─── 辅助函数 ───
+def upsert_setting(key: str, value: str):
+    """插入或更新设置项（兼容 SQLite 和 PostgreSQL）"""
+    conn = get_connection()
+    if USE_SUPABASE:
+        conn.execute(
+            "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, NOW()) "
+            "ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()",
+            (key, value),
+        )
+    else:
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))",
+            (key, value),
+        )
+    conn.commit()
+    conn.close()
+
+
+def table_exists(table_name: str) -> bool:
+    """检查表是否存在（兼容 SQLite 和 PostgreSQL）"""
+    conn = get_connection()
+    try:
+        if USE_SUPABASE:
+            row = conn.execute(
+                "SELECT 1 FROM information_schema.tables WHERE table_name = ?",
+                (table_name,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,),
+            ).fetchone()
+        return row is not None
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+# ─── 默认规则种子 ───
 def _seed_default_rules():
     """首次运行时从 assets/rules.json 加载默认黄金规则"""
     conn = get_connection()
-    count = conn.execute("SELECT COUNT(*) FROM rules").fetchone()[0]
-    if count > 0:
+    count = conn.execute("SELECT COUNT(*) FROM rules").fetchone()
+    # RealDictCursor 返回 dict，sqlite3.Row 也支持 [0]
+    cnt = count[0] if count else 0
+    if cnt > 0:
         conn.close()
         return
     rules_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "rules.json")
@@ -207,8 +407,78 @@ def _seed_default_rules():
     conn.close()
 
 
+# ─── JSON 自动导出/导入 ───
+def export_all_json() -> str:
+    """导出所有表数据为 JSON 字符串（自动备份用）"""
+    import json
+    conn = get_connection()
+    tables = ["patients", "daily_cards", "rules", "settings", "chat_messages"]
+    data = {}
+    for table in tables:
+        try:
+            rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+            data[table] = [dict(r) for r in rows]
+        except Exception:
+            data[table] = []
+    conn.close()
+    return json.dumps(data, ensure_ascii=False, default=str)
+
+
+def auto_export_json() -> str:
+    """自动保存 JSON 备份到 data/app.json（每次写操作后调用）"""
+    try:
+        json_str = export_all_json()
+        backup_path = os.path.join(os.path.dirname(DB_PATH), "app.json")
+        with open(backup_path, "w", encoding="utf-8") as f:
+            f.write(json_str)
+        return json_str
+    except Exception:
+        return ""
+
+
+def import_all_json(json_str: str):
+    """从 JSON 字符串恢复所有数据（兼容 SQLite 和 PostgreSQL）"""
+    import json
+    data = json.loads(json_str)
+
+    order = ["patients", "daily_cards", "rules", "settings", "chat_messages"]
+    for table in order:
+        rows = data.get(table, [])
+        if not rows:
+            continue
+        for row in rows:
+            # 过滤掉可能不存在的列
+            columns = list(row.keys())
+            values = [row[c] for c in columns]
+            placeholders = ", ".join(["?" for _ in columns])
+            cols_str = ", ".join(columns)
+            try:
+                conn = get_connection()
+                if USE_SUPABASE:
+                    # PostgreSQL: ON CONFLICT DO NOTHING
+                    conn.execute(
+                        f"INSERT INTO {table} ({cols_str}) VALUES ({placeholders}) ON CONFLICT(id) DO NOTHING",
+                        values,
+                    )
+                else:
+                    conn.execute(
+                        f"INSERT OR IGNORE INTO {table} ({cols_str}) VALUES ({placeholders})",
+                        values,
+                    )
+                conn.commit()
+                conn.close()
+            except Exception:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+
+# ─── SQLite 专用备份 ───
 def backup_database():
-    """每日自动备份数据库（保留最近30份）"""
+    """每日自动备份 SQLite 数据库（仅本地模式）"""
+    if USE_SUPABASE:
+        return
     if not os.path.exists(DB_PATH):
         return
     os.makedirs(BACKUP_DIR, exist_ok=True)
@@ -219,7 +489,6 @@ def backup_database():
             shutil.copy2(DB_PATH, backup_file)
         except Exception:
             pass
-    # 清理旧备份
     backups = sorted([
         f for f in os.listdir(BACKUP_DIR) if f.startswith("app_") and f.endswith(".db")
     ])

@@ -2,20 +2,13 @@
 
 import uuid
 from datetime import datetime
-from core.database import get_connection
+from core.database import get_connection, table_exists
+from core.database import auto_export_json as _auto_export
 
 
 def _table_exists() -> bool:
-    """检查 chat_messages 表是否存在"""
-    try:
-        conn = get_connection()
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='chat_messages'"
-        ).fetchone()
-        conn.close()
-        return row is not None
-    except Exception:
-        return False
+    """检查 chat_messages 表是否存在（兼容 SQLite 和 PostgreSQL）"""
+    return table_exists("chat_messages")
 
 
 def create(patient_id: str, conversation_id: str, role: str, content: str,
@@ -31,8 +24,8 @@ def create(patient_id: str, conversation_id: str, role: str, content: str,
             (msg_id, patient_id, conversation_id, role, content, image_data, model_used, now),
         )
         conn.commit()
+        _auto_export()
     except Exception:
-        # 重复插入时静默忽略
         pass
     finally:
         conn.close()
@@ -97,6 +90,7 @@ def delete_conversation(patient_id: str, conversation_id: str):
         )
         conn.commit()
         conn.close()
+        _auto_export()
     except Exception:
         pass
 

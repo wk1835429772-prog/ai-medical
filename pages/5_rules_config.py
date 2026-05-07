@@ -2,8 +2,10 @@
 
 import streamlit as st
 import uuid
+import os
+from datetime import datetime
 
-from core.database import init_database
+from core.database import init_database, get_connection, upsert_setting, export_all_json, import_all_json, USE_SUPABASE
 init_database()
 
 from config import REFERENCE_RANGES
@@ -56,22 +58,10 @@ with tab1:
     with col1:
         if st.button("💾 保存 API 配置", type="primary"):
             if api_key.strip():
-                conn = get_connection()
-                encrypted = encrypt(api_key.strip())
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('api_key', ?, datetime('now','localtime'))",
-                    (encrypted,),
-                )
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('model_fast', ?, datetime('now','localtime'))",
-                    (model_fast,),
-                )
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('model_pro', ?, datetime('now','localtime'))",
-                    (model_pro,),
-                )
-                conn.commit()
-                conn.close()
+                from core.security import encrypt
+                upsert_setting("api_key", encrypt(api_key.strip()))
+                upsert_setting("model_fast", model_fast)
+                upsert_setting("model_pro", model_pro)
                 st.success("✅ API 配置已保存")
             else:
                 st.error("API Key 不能为空")
@@ -210,13 +200,7 @@ with tab3:
         with c4:
             if st.button("保存", key=f"ref_save_{key}"):
                 import json
-                conn = get_connection()
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))",
-                    (f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]})),
-                )
-                conn.commit()
-                conn.close()
+                upsert_setting(f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]}))
                 st.success(f"{ref['label']} 已更新")
                 st.rerun()
 
@@ -242,13 +226,7 @@ with tab3:
         with c4:
             if st.button("保存", key=f"ref_save_{key}"):
                 import json
-                conn = get_connection()
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))",
-                    (f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]})),
-                )
-                conn.commit()
-                conn.close()
+                upsert_setting(f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]}))
                 st.success(f"{ref['label']} 已更新")
                 st.rerun()
 
@@ -274,13 +252,7 @@ with tab3:
         with c4:
             if st.button("保存", key=f"ref_save_{key}"):
                 import json
-                conn = get_connection()
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))",
-                    (f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]})),
-                )
-                conn.commit()
-                conn.close()
+                upsert_setting(f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]}))
                 st.success(f"{ref['label']} 已更新")
                 st.rerun()
 
@@ -308,13 +280,7 @@ with tab3:
         with c4:
             if st.button("保存", key=f"ref_save_{key}"):
                 import json
-                conn = get_connection()
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now','localtime'))",
-                    (f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]})),
-                )
-                conn.commit()
-                conn.close()
+                upsert_setting(f"ref_{key}", json.dumps({"label": ref["label"], "lo": lo, "hi": hi, "unit": ref["unit"]}))
                 st.success(f"{ref['label']} 已更新")
                 st.rerun()
 
@@ -334,4 +300,43 @@ with tab4:
     from prompts.prompt_builder import build_system_prompt
     full_prompt = build_system_prompt(include_rules=True)
     st.text_area("当前有效 System Prompt（含动态规则）", full_prompt, height=500, disabled=True)
-    st.caption(f"提示：在「黄金规则」标签页添加/编辑规则后，此处会实时更新。")
+    st.caption("提示：在「黄金规则」标签页添加/编辑规则后，此处会实时更新。")
+
+# --- 数据库状态 + 数据备份 ---
+st.divider()
+st.subheader("💿 数据管理")
+
+col1, col2, col3 = st.columns(3)
+
+# 显示当前后端
+with col1:
+    backend = "Supabase (云端)" if USE_SUPABASE else "SQLite (本地)"
+    st.metric("数据库后端", backend)
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "app.json")
+    if os.path.exists(json_path):
+        import time
+        mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(json_path)))
+        st.caption(f"最近自动备份：{mtime}")
+
+# 导出按钮
+with col2:
+    json_str = export_all_json()
+    st.download_button(
+        "📥 导出数据 (JSON)",
+        data=json_str,
+        file_name=f"clinical_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+        mime="application/json",
+        help="下载全部数据为 JSON 文件",
+    )
+
+# 导入按钮
+with col3:
+    uploaded_file = st.file_uploader("📤 导入数据", type=["json"], key="import_json", label_visibility="collapsed")
+    if uploaded_file:
+        try:
+            content = uploaded_file.getvalue().decode("utf-8")
+            import_all_json(content)
+            st.success("✅ 数据已导入")
+            st.rerun()
+        except Exception as e:
+            st.error(f"导入失败：{e}")
