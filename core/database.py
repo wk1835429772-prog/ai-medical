@@ -133,20 +133,17 @@ def init_database():
 
 def _migrate_bed_number():
     """确保 patients 表有 bed_number 列"""
-    try:
-        conn = get_connection()
-        if USE_SUPABASE:
-            conn.execute(
-                "ALTER TABLE patients ADD COLUMN IF NOT EXISTS bed_number TEXT DEFAULT ''"
-            )
-        else:
-            pc = {row[1] for row in conn.execute("PRAGMA table_info(patients)").fetchall()}
-            if "bed_number" not in pc:
-                conn.execute("ALTER TABLE patients ADD COLUMN bed_number TEXT DEFAULT ''")
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
+    conn = get_connection()
+    if USE_SUPABASE:
+        conn.execute(
+            "ALTER TABLE patients ADD COLUMN IF NOT EXISTS bed_number TEXT DEFAULT ''"
+        )
+    else:
+        pc = {row[1] for row in conn.execute("PRAGMA table_info(patients)").fetchall()}
+        if "bed_number" not in pc:
+            conn.execute("ALTER TABLE patients ADD COLUMN bed_number TEXT DEFAULT ''")
+    conn.commit()
+    conn.close()
     if USE_SUPABASE:
         _init_pg()
     else:
