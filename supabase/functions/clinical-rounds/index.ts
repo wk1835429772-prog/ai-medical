@@ -177,13 +177,11 @@ Deno.serve(async (req: Request) => {
     }
 
     if (method === "notifications/initialized") {
-      return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, result: {} }),
-        { headers: jsonHeaders });
+      return new Response(null, { status: 204, headers: jsonHeaders });
     }
 
     if (method?.startsWith("notifications/")) {
-      return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, result: {} }),
-        { headers: jsonHeaders });
+      return new Response(null, { status: 204, headers: jsonHeaders });
     }
 
     if (method === "ping") {
