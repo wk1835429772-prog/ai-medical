@@ -453,7 +453,7 @@ def import_all_json(json_str: str):
 def _seed_default_rules():
     conn = get_connection()
     row = conn.execute("SELECT COUNT(*) FROM rules").fetchone()
-    cnt = list(row)[0] if row else 0
+    cnt = int(list(row)[0]) if row else 0
     if cnt > 0:
         conn.close()
         return
