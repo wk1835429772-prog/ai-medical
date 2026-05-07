@@ -47,10 +47,23 @@ class PgConnection:
                 self._cursor.execute(stmt)
         return self
 
+    class _Row(dict):
+        """支持 row[0] 和 row['col'] 两种访问方式"""
+        def __init__(self, data, desc):
+            super().__init__(data)
+            self._desc = desc
+        def __getitem__(self, key):
+            if isinstance(key, int):
+                return list(self.values())[key]
+            return super().__getitem__(key)
+        def __iter__(self):
+            return iter(self.values())
+
     def _row_to_dict(self, row):
         if row is None or self._description is None:
             return None
-        return {self._description[i][0]: row[i] for i in range(len(row))}
+        data = {self._description[i][0]: row[i] for i in range(len(row))}
+        return self._Row(data, self._description)
 
     def fetchone(self):
         row = self._cursor.fetchone()
@@ -453,7 +466,7 @@ def import_all_json(json_str: str):
 def _seed_default_rules():
     conn = get_connection()
     row = conn.execute("SELECT COUNT(*) FROM rules").fetchone()
-    cnt = int(list(row)[0]) if row else 0
+    cnt = row[0] if row else 0
     if cnt > 0:
         conn.close()
         return
