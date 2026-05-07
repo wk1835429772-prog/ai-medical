@@ -4,12 +4,12 @@ import sqlite3
 import os
 import shutil
 from datetime import datetime
+from urllib.parse import urlparse
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "app.db")
 BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "backups")
 
 # ─── 后端检测 ───
-# 优先读 Streamlit secrets，其次读环境变量
 def _get_supabase_url() -> str:
     url = os.environ.get("SUPABASE_URL", "")
     if not url:
@@ -23,39 +23,42 @@ def _get_supabase_url() -> str:
 USE_SUPABASE = bool(_get_supabase_url())
 
 
-# ─── PostgreSQL 兼容包装 ───
+# ─── PostgreSQL 兼容包装（pg8000 驱动） ───
 class PgConnection:
-    """包装 psycopg2 连接，使行为与 sqlite3.Row 兼容（row["column"] 可用）"""
+    """包装 pg8000 连接，使行为与 sqlite3.Row 兼容（row["column"] 可用）"""
 
     def __init__(self, conn):
-        try:
-            import psycopg2.extras
-            self._conn = conn
-            self._cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        except ImportError:
-            raise ImportError("PostgreSQL 后端需要 psycopg2-binary：pip install psycopg2-binary")
+        self._conn = conn
+        self._cursor = conn.cursor()
+        self._description = None
 
     def execute(self, sql, params=None):
         # ? 占位符 → %s（PostgreSQL 格式）
         pg_sql = sql.replace("?", "%s")
         self._cursor.execute(pg_sql, params or ())
+        self._description = self._cursor.description
         return self
 
     def executescript(self, script):
-        """逐条执行 SQL 脚本（PostgreSQL 不支持 executescript）"""
+        """逐条执行 SQL 脚本"""
         for stmt in script.split(";"):
             stmt = stmt.strip()
             if stmt:
                 self._cursor.execute(stmt)
         return self
 
+    def _row_to_dict(self, row):
+        if row is None or self._description is None:
+            return None
+        return {self._description[i][0]: row[i] for i in range(len(row))}
+
     def fetchone(self):
         row = self._cursor.fetchone()
-        return dict(row) if row else None
+        return self._row_to_dict(row)
 
     def fetchall(self):
         rows = self._cursor.fetchall()
-        return [dict(r) for r in rows]
+        return [self._row_to_dict(r) for r in rows]
 
     def commit(self):
         self._conn.commit()
@@ -70,7 +73,6 @@ class PgConnection:
         except Exception:
             pass
 
-    # 兼容 cursor 属性（部分代码用 conn.cursor()）
     def cursor(self):
         return self._cursor
 
@@ -94,22 +96,25 @@ def _get_sqlite_connection():
 
 def _get_pg_connection():
     try:
-        import psycopg2
-        import psycopg2.extras
+        import pg8000
     except ImportError:
-        raise ImportError("PostgreSQL 后端需要 psycopg2-binary：pip install psycopg2-binary")
-    url = _get_supabase_url()
-    # Supabase 强制要求 SSL，连接超时 30s
-    if "sslmode" not in url:
-        url = url + ("&" if "?" in url else "?") + "sslmode=require"
-    conn = psycopg2.connect(url, connect_timeout=30)
-    conn.autocommit = False
+        raise ImportError("PostgreSQL 后端需要 pg8000：pip install pg8000")
+    url_str = _get_supabase_url()
+    parsed = urlparse(url_str)
+    user = parsed.username or "postgres"
+    password = parsed.password or ""
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 5432
+    database = parsed.path.lstrip("/") if parsed.path else "postgres"
+    conn = pg8000.Connection(
+        user=user, password=password, host=host, port=port,
+        database=database, tls=True, timeout=30,
+    )
     return PgConnection(conn)
 
 
 # ─── 初始化 ───
 def init_database():
-    """首次运行时自动建表（自动选择 SQLite 或 PostgreSQL）"""
     if USE_SUPABASE:
         _init_pg()
     else:
@@ -243,7 +248,8 @@ def _init_sqlite():
 def _init_pg():
     """PostgreSQL/Supabase 初始化"""
     conn = get_connection()
-    conn.executescript("""
+
+    tables_sql = """
         CREATE TABLE IF NOT EXISTS patients (
             id TEXT PRIMARY KEY,
             name_abbr TEXT NOT NULL,
@@ -258,7 +264,6 @@ def _init_pg():
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-
         CREATE TABLE IF NOT EXISTS daily_cards (
             id TEXT PRIMARY KEY,
             patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
@@ -296,7 +301,6 @@ def _init_pg():
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(patient_id, data_date)
         );
-
         CREATE TABLE IF NOT EXISTS rules (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
@@ -306,13 +310,11 @@ def _init_pg():
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-
         CREATE TABLE IF NOT EXISTS chat_messages (
             id TEXT PRIMARY KEY,
             patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
@@ -323,23 +325,27 @@ def _init_pg():
             model_used TEXT DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-    """)
+    """
+    for stmt in tables_sql.split(";"):
+        stmt = stmt.strip()
+        if stmt:
+            conn.execute(stmt)
     conn.commit()
 
-    # 索引（单独执行，避免 executescript 事务问题）
-    for idx_sql in [
+    indexes = [
         "CREATE INDEX IF NOT EXISTS idx_daily_cards_patient ON daily_cards(patient_id)",
         "CREATE INDEX IF NOT EXISTS idx_daily_cards_date ON daily_cards(data_date)",
         "CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(name_abbr)",
         "CREATE INDEX IF NOT EXISTS idx_rules_active ON rules(is_active)",
         "CREATE INDEX IF NOT EXISTS idx_chat_patient ON chat_messages(patient_id)",
         "CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_messages(conversation_id)",
-    ]:
+    ]
+    for idx_sql in indexes:
         try:
             conn.execute(idx_sql)
             conn.commit()
         except Exception:
-            conn.commit()  # 索引已存在时忽略
+            pass
 
     conn.close()
     _seed_default_rules()
@@ -347,7 +353,6 @@ def _init_pg():
 
 # ─── 辅助函数 ───
 def upsert_setting(key: str, value: str):
-    """插入或更新设置项（兼容 SQLite 和 PostgreSQL）"""
     conn = get_connection()
     if USE_SUPABASE:
         conn.execute(
@@ -365,7 +370,6 @@ def upsert_setting(key: str, value: str):
 
 
 def table_exists(table_name: str) -> bool:
-    """检查表是否存在（兼容 SQLite 和 PostgreSQL）"""
     conn = get_connection()
     try:
         if USE_SUPABASE:
@@ -385,12 +389,69 @@ def table_exists(table_name: str) -> bool:
         conn.close()
 
 
+# ─── JSON 自动导出/导入 ───
+def export_all_json() -> str:
+    import json
+    conn = get_connection()
+    tables = ["patients", "daily_cards", "rules", "settings", "chat_messages"]
+    data = {}
+    for table in tables:
+        try:
+            rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+            data[table] = [dict(r) for r in rows]
+        except Exception:
+            data[table] = []
+    conn.close()
+    return json.dumps(data, ensure_ascii=False, default=str)
+
+
+def auto_export_json() -> str:
+    try:
+        json_str = export_all_json()
+        backup_path = os.path.join(os.path.dirname(DB_PATH), "app.json")
+        with open(backup_path, "w", encoding="utf-8") as f:
+            f.write(json_str)
+        return json_str
+    except Exception:
+        return ""
+
+
+def import_all_json(json_str: str):
+    import json
+    data = json.loads(json_str)
+    order = ["patients", "daily_cards", "rules", "settings", "chat_messages"]
+    for table in order:
+        rows = data.get(table, [])
+        for row in rows:
+            columns = list(row.keys())
+            values = [row[c] for c in columns]
+            placeholders = ", ".join(["?" for _ in columns])
+            cols_str = ", ".join(columns)
+            try:
+                conn = get_connection()
+                if USE_SUPABASE:
+                    conn.execute(
+                        f"INSERT INTO {table} ({cols_str}) VALUES ({placeholders}) ON CONFLICT(id) DO NOTHING",
+                        values,
+                    )
+                else:
+                    conn.execute(
+                        f"INSERT OR IGNORE INTO {table} ({cols_str}) VALUES ({placeholders})",
+                        values,
+                    )
+                conn.commit()
+                conn.close()
+            except Exception:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+
 # ─── 默认规则种子 ───
 def _seed_default_rules():
-    """首次运行时从 assets/rules.json 加载默认黄金规则"""
     conn = get_connection()
     count = conn.execute("SELECT COUNT(*) FROM rules").fetchone()
-    # RealDictCursor 返回 dict，sqlite3.Row 也支持 [0]
     cnt = count[0] if count else 0
     if cnt > 0:
         conn.close()
@@ -411,76 +472,8 @@ def _seed_default_rules():
     conn.close()
 
 
-# ─── JSON 自动导出/导入 ───
-def export_all_json() -> str:
-    """导出所有表数据为 JSON 字符串（自动备份用）"""
-    import json
-    conn = get_connection()
-    tables = ["patients", "daily_cards", "rules", "settings", "chat_messages"]
-    data = {}
-    for table in tables:
-        try:
-            rows = conn.execute(f"SELECT * FROM {table}").fetchall()
-            data[table] = [dict(r) for r in rows]
-        except Exception:
-            data[table] = []
-    conn.close()
-    return json.dumps(data, ensure_ascii=False, default=str)
-
-
-def auto_export_json() -> str:
-    """自动保存 JSON 备份到 data/app.json（每次写操作后调用）"""
-    try:
-        json_str = export_all_json()
-        backup_path = os.path.join(os.path.dirname(DB_PATH), "app.json")
-        with open(backup_path, "w", encoding="utf-8") as f:
-            f.write(json_str)
-        return json_str
-    except Exception:
-        return ""
-
-
-def import_all_json(json_str: str):
-    """从 JSON 字符串恢复所有数据（兼容 SQLite 和 PostgreSQL）"""
-    import json
-    data = json.loads(json_str)
-
-    order = ["patients", "daily_cards", "rules", "settings", "chat_messages"]
-    for table in order:
-        rows = data.get(table, [])
-        if not rows:
-            continue
-        for row in rows:
-            # 过滤掉可能不存在的列
-            columns = list(row.keys())
-            values = [row[c] for c in columns]
-            placeholders = ", ".join(["?" for _ in columns])
-            cols_str = ", ".join(columns)
-            try:
-                conn = get_connection()
-                if USE_SUPABASE:
-                    # PostgreSQL: ON CONFLICT DO NOTHING
-                    conn.execute(
-                        f"INSERT INTO {table} ({cols_str}) VALUES ({placeholders}) ON CONFLICT(id) DO NOTHING",
-                        values,
-                    )
-                else:
-                    conn.execute(
-                        f"INSERT OR IGNORE INTO {table} ({cols_str}) VALUES ({placeholders})",
-                        values,
-                    )
-                conn.commit()
-                conn.close()
-            except Exception:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-
-
 # ─── SQLite 专用备份 ───
 def backup_database():
-    """每日自动备份 SQLite 数据库（仅本地模式）"""
     if USE_SUPABASE:
         return
     if not os.path.exists(DB_PATH):
