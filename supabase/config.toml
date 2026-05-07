@@ -1,0 +1,2 @@
+[functions.clinical-rounds]
+verify_jwt = false

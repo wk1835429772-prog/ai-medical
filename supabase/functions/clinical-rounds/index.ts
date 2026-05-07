@@ -156,7 +156,7 @@ function formatRounds(patient: any, card: any, bed: number): string {
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const action = url.searchParams.get("action") || "";
-  const bed = parseInt(url.searchParams.get("bed") || "");
+  const bed = url.searchParams.get("bed") || "";
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -164,36 +164,49 @@ Deno.serve(async (req: Request) => {
   );
 
   const { patients, cardMap } = await getData(supabase);
-  const bedMap: Record<number, any> = {};
-  patients.forEach((p: any, i: number) => (bedMap[i + 1] = p));
+
+  // 按床号查找
+  function findByBed(bedNum: string) {
+    return patients.find((p: any) => p.bed_number === bedNum) || null;
+  }
 
   if (action === "patient_list") {
     const lines = ["**管床患者列表**\n"];
-    for (const b of Object.keys(bedMap).map(Number).sort()) {
-      const p = bedMap[b];
+    const sorted = [...patients].sort((a: any, b: any) => {
+      const an = parseInt(a.bed_number), bn = parseInt(b.bed_number);
+      if (!isNaN(an) && !isNaN(bn)) return an - bn;
+      return (a.bed_number || "").localeCompare(b.bed_number || "");
+    });
+    for (const p of sorted) {
+      const bnum = p.bed_number || "?";
       const pod = calcPostopDay(p.surgery_date);
-      lines.push(`- **${b}床**: ${p.name_abbr} | ${p.age}岁 | ${p.primary_diagnosis?.slice(0, 20) || ""} | ${pod != null ? "术后D" + pod : ""}`);
+      lines.push(`- **${bnum}床**: ${p.name_abbr} | ${p.age}岁 | ${p.primary_diagnosis?.slice(0, 20) || ""} | ${pod != null ? "术后D" + pod : ""}`);
     }
     return new Response(lines.join("\n"), {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   }
 
-  if (action === "rounds_by_bed" && !isNaN(bed)) {
-    const patient = bedMap[bed];
+  if (action === "rounds_by_bed" && bed) {
+    const patient = findByBed(bed);
     if (!patient) return new Response(`未找到 ${bed} 床患者`, { status: 404 });
     const card = cardMap[patient.id] || {};
-    return new Response(formatRounds(patient, card, bed), {
+    return new Response(formatRounds(patient, card, parseInt(bed) || 0), {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   }
 
   if (action === "rounds_all") {
     const sections: string[] = [];
-    for (const b of Object.keys(bedMap).map(Number).sort()) {
-      const p = bedMap[b];
+    const sorted = [...patients].sort((a: any, b: any) => {
+      const an = parseInt(a.bed_number), bn = parseInt(b.bed_number);
+      if (!isNaN(an) && !isNaN(bn)) return an - bn;
+      return 0;
+    });
+    for (const p of sorted) {
       const card = cardMap[p.id] || {};
-      sections.push(formatRounds(p, card, b));
+      const bnum = parseInt(p.bed_number) || 0;
+      sections.push(formatRounds(p, card, bnum));
       sections.push("\n---\n");
     }
     return new Response(sections.join("\n"), {
@@ -203,17 +216,17 @@ Deno.serve(async (req: Request) => {
 
   if (action === "abnormal_flags") {
     const flags: string[] = [];
-    for (const b of Object.keys(bedMap).map(Number).sort()) {
-      const p = bedMap[b];
+    for (const p of patients) {
       const card = cardMap[p.id];
       if (!card) continue;
+      const bnum = p.bed_number || "?";
       for (const [key, ref] of Object.entries(REFERENCE_RANGES)) {
         const v = card[key];
         if (v == null || v === "" || v === "正常") continue;
         const n = Number(v);
         if (isNaN(n)) continue;
-        if (n > ref.hi) flags.push(`- **${b}床 ${p.name_abbr}**: ${ref.label} = ${n} 🔴↑`);
-        else if (n < ref.lo) flags.push(`- **${b}床 ${p.name_abbr}**: ${ref.label} = ${n} 🔵↓`);
+        if (n > ref.hi) flags.push(`- **${bnum}床 ${p.name_abbr}**: ${ref.label} = ${n} 🔴↑`);
+        else if (n < ref.lo) flags.push(`- **${bnum}床 ${p.name_abbr}**: ${ref.label} = ${n} 🔵↓`);
       }
     }
     return new Response(flags.length ? "**异常值汇总**\n\n" + flags.join("\n") : "✅ 所有指标正常", {

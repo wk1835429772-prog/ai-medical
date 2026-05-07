@@ -19,18 +19,78 @@ from config import REFERENCE_RANGES, CRITICAL_THRESHOLDS
 
 mcp = FastMCP("临床查房助手")
 
-# ─── 床号映射（按患者创建时间排序编号） ───
-def _build_bed_map() -> dict[int, str]:
-    """返回 {床号: patient_id} 映射"""
+# ─── 患者匹配 ───
+def _find_by_bed(bed_number: str):
+    """按床号查找患者"""
     patients = patient_db.get_all()
-    mapping = {}
-    for i, p in enumerate(patients, 1):
-        mapping[i] = p["id"]
-    return mapping
+    for p in patients:
+        if p.get("bed_number", "") == bed_number:
+            return p
+    return None
 
 
-def _patient_with_bed(patient: dict, bed: int) -> dict:
-    """给患者信息附加床号"""
+def _all_with_bed() -> list:
+    """返回所有患者 + 附加信息"""
+    patients = patient_db.get_all()
+    result = []
+    for p in patients:
+        bed = p.get("bed_number", "")
+        pod = calc_postop_days(p.get("surgery_date"))
+        result.append({
+            "bed": bed or "未设",
+            "id": p["id"],
+            "name": p["name_abbr"],
+            "age": p.get("age"),
+            "gender": p.get("gender", ""),
+            "diagnosis": p.get("primary_diagnosis", ""),
+            "surgery_type": p.get("surgery_type", ""),
+            "surgery_date": p.get("surgery_date"),
+            "postop_day": pod,
+        })
+    return result
+
+
+# ─── 工具 1: 患者列表 ───
+@mcp.tool()
+def get_patient_list() -> str:
+    """列出所有管床患者（床号、姓名、诊断、术后天数）"""
+    patients = _all_with_bed()
+    if not patients:
+        return "暂无患者数据"
+
+    lines = ["**管床患者列表**\n"]
+    # 按床号排序
+    patients.sort(key=lambda p: (p["bed"].isdigit(), int(p["bed"]) if p["bed"].isdigit() else 999))
+    for info in patients:
+        pod = f"术后D{info['postop_day']}" if info["postop_day"] is not None else ""
+        lines.append(
+            f"- **{info['bed']}床**: {info['name']} | {info['age']}岁 | {info['diagnosis'][:20]} | {pod}"
+        )
+    return "\n".join(lines)
+
+
+# ─── 工具 2: 查某床 ───
+@mcp.tool()
+def get_rounds_by_bed(bed: str) -> str:
+    """
+    返回指定床号患者的完整查房汇报。
+    Args:
+        bed: 床号（如 "1", "2", "3"）
+    """
+    patient = _find_by_bed(bed)
+    if not patient:
+        return f"未找到 {bed} 床患者"
+
+    today = date.today().isoformat()
+    card = card_db.get_or_create(patient["id"], today)
+    pod = calc_postop_days(patient.get("surgery_date"))
+    info = _patient_info(patient, bed)
+
+    return _format_rounds(info, card)
+
+
+def _patient_info(patient: dict, bed: str) -> dict:
+    pod = calc_postop_days(patient.get("surgery_date"))
     return {
         "bed": bed,
         "id": patient["id"],
@@ -40,78 +100,28 @@ def _patient_with_bed(patient: dict, bed: int) -> dict:
         "diagnosis": patient.get("primary_diagnosis", ""),
         "surgery_type": patient.get("surgery_type", ""),
         "surgery_date": patient.get("surgery_date"),
-        "postop_day": calc_postop_days(patient.get("surgery_date")),
+        "postop_day": pod,
     }
-
-
-# ─── 工具 1: 患者列表 ───
-@mcp.tool()
-def get_patient_list() -> str:
-    """列出所有管床患者（床号、姓名、诊断、术后天数）"""
-    bed_map = _build_bed_map()
-    if not bed_map:
-        return "暂无患者数据"
-
-    lines = ["**管床患者列表**\n"]
-    for bed in sorted(bed_map.keys()):
-        pid = bed_map[bed]
-        patient = patient_db.get_by_id(pid)
-        if not patient:
-            continue
-        info = _patient_with_bed(patient, bed)
-        pod = f"术后D{info['postop_day']}" if info["postop_day"] is not None else ""
-        lines.append(
-            f"- **{bed}床**: {info['name']} | {info['age']}岁 | {info['diagnosis'][:20]} | {pod}"
-        )
-    return "\n".join(lines)
-
-
-# ─── 工具 2: 查某床 ───
-@mcp.tool()
-def get_rounds_by_bed(bed: int) -> str:
-    """
-    返回指定床号患者的完整查房汇报。
-
-    Args:
-        bed: 床号（整数，如 1, 2, 3）
-    """
-    bed_map = _build_bed_map()
-    if bed not in bed_map:
-        return f"未找到 {bed} 床患者"
-
-    pid = bed_map[bed]
-    patient = patient_db.get_by_id(pid)
-    if not patient:
-        return f"{bed} 床患者数据异常"
-
-    today = date.today().isoformat()
-    card = card_db.get_or_create(pid, today)
-    info = _patient_with_bed(patient, bed)
-
-    return _format_rounds(info, card)
 
 
 # ─── 工具 3: 全查 ───
 @mcp.tool()
 def get_rounds_all() -> str:
     """返回所有患者的查房汇报"""
-    bed_map = _build_bed_map()
-    if not bed_map:
+    patients = _all_with_bed()
+    if not patients:
         return "暂无患者"
 
     today = date.today().isoformat()
     sections = []
-    for bed in sorted(bed_map.keys()):
-        pid = bed_map[bed]
-        patient = patient_db.get_by_id(pid)
-        card = card_db.get_or_create(pid, today)
-        if not patient:
+    for info in patients:
+        card = card_db.get_or_create(info["id"], today)
+        if not card:
             continue
-        info = _patient_with_bed(patient, bed)
         sections.append(_format_rounds(info, card))
         sections.append("\n---\n")
 
-    return "\n".join(sections)
+    return "\n".join(sections) if sections else "暂无日卡数据"
 
 
 # ─── 工具 4: 异常值 ───
@@ -119,13 +129,12 @@ def get_rounds_all() -> str:
 def get_abnormal_flags() -> str:
     """列出所有患者当前偏离正常范围的指标"""
     today = date.today().isoformat()
-    bed_map = _build_bed_map()
+    patients = _all_with_bed()
     all_flags = []
 
-    for bed in sorted(bed_map.keys()):
-        pid = bed_map[bed]
-        patient = patient_db.get_by_id(pid)
-        card = card_db.get_or_create(pid, today)
+    for info in patients:
+        patient = patient_db.get_by_id(info["id"])
+        card = card_db.get_or_create(info["id"], today)
         if not patient or not card:
             continue
         name = patient["name_abbr"]
@@ -144,9 +153,8 @@ def get_abnormal_flags() -> str:
             elif v < ref["lo"]:
                 flag = f"↓ 偏低"
             if flag:
-                all_flags.append(f"- **{bed}床 {name}**: {ref['label']} = {v} {flag} (正常: {ref['lo']}-{ref['hi']} {ref['unit']})")
+                all_flags.append(f"- **{info['bed']}床 {name}**: {ref['label']} = {v} {flag} (正常: {ref['lo']}-{ref['hi']} {ref['unit']})")
 
-        # 危急值检查
         for key, crit in CRITICAL_THRESHOLDS.items():
             val = card.get(key)
             if val is None:
@@ -161,7 +169,7 @@ def get_abnormal_flags() -> str:
             if "lo" in crit and v < crit["lo"]:
                 triggered = True
             if triggered:
-                all_flags.append(f"- 🚨 **{bed}床 {name}**: {crit['label']} | 当前值: {v}")
+                all_flags.append(f"- 🚨 **{info['bed']}床 {name}**: {crit['label']} | 当前值: {v}")
 
     if not all_flags:
         return "✅ 所有指标正常"

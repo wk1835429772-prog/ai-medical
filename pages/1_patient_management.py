@@ -33,6 +33,7 @@ if st.session_state.show_add_form:
             col1, col2, col3 = st.columns(3)
             with col1:
                 name_abbr = st.text_input("姓名缩写 *", placeholder="如：张三 → ZS")
+                bed_number = st.text_input("床号", placeholder="如：3")
                 age = st.number_input("年龄", min_value=0, max_value=120, step=1)
                 gender = st.selectbox("性别", ["", "男", "女", "其他"])
             with col2:
@@ -55,6 +56,7 @@ if st.session_state.show_add_form:
                 else:
                     data = {
                         "name_abbr": name_abbr.strip().upper(),
+                        "bed_number": bed_number.strip(),
                         "age": age if age > 0 else None,
                         "gender": gender,
                         "admission_date": admission_date.isoformat() if admission_date else "",
@@ -81,6 +83,7 @@ if st.session_state.editing_patient_id:
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     name_abbr = st.text_input("姓名缩写 *", value=patient.get("name_abbr", ""))
+                    bed_number = st.text_input("床号", value=patient.get("bed_number", ""))
                     age = st.number_input("年龄", min_value=0, max_value=120, step=1,
                                           value=patient.get("age") or 0)
                     gender = st.selectbox("性别", ["", "男", "女", "其他"],
@@ -112,6 +115,7 @@ if st.session_state.editing_patient_id:
                 if submitted:
                     data = {
                         "name_abbr": name_abbr.strip().upper(),
+                        "bed_number": bed_number.strip(),
                         "age": age if age > 0 else None,
                         "gender": gender,
                         "admission_date": admission_date.isoformat() if admission_date else "",
@@ -151,6 +155,7 @@ for p in patients:
         <div style="background:white;border-radius:12px;padding:12px 16px;margin-bottom:8px;
                     border-left:4px solid {border_color};box-shadow:0 1px 4px rgba(0,0,0,0.06);">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                {f'<span style="background:#1a5276;color:white;padding:2px 8px;border-radius:4px;font-size:0.8rem;">{p.get("bed_number","?")}床</span>' if p.get("bed_number") else ''}
                 <span style="font-weight:700;font-size:1.05rem;">{dot_emoji} {p['name_abbr']}</span>
                 <span style="font-size:0.8rem;color:#666;">{p.get('gender','')} · {p.get('age','')}岁</span>
                 {f'<span style="font-size:0.8rem;background:#e8f5f3;color:#2a9d8f;padding:2px 8px;border-radius:4px;">术后D{postop}</span>' if postop is not None else ''}

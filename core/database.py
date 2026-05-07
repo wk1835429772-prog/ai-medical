@@ -255,6 +255,12 @@ def _init_sqlite():
     except Exception:
         pass
 
+    # 迁移：bed_number 列
+    pc = {row[1] for row in cursor.execute("PRAGMA table_info(patients)").fetchall()}
+    if "bed_number" not in pc:
+        cursor.execute("ALTER TABLE patients ADD COLUMN bed_number TEXT DEFAULT ''")
+        conn.commit()
+
     _seed_default_rules()
 
 
@@ -262,11 +268,19 @@ def _init_pg():
     """PostgreSQL/Supabase 初始化"""
     conn = get_connection()
 
+    # 添加 bed_number 列（兼容旧表）
+    try:
+        conn.execute("ALTER TABLE patients ADD COLUMN IF NOT EXISTS bed_number TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+
     tables_sql = """
         CREATE TABLE IF NOT EXISTS patients (
             id TEXT PRIMARY KEY,
             name_abbr TEXT NOT NULL,
             age INTEGER,
+            bed_number TEXT DEFAULT '',
             gender TEXT DEFAULT '',
             admission_date TEXT,
             primary_diagnosis TEXT DEFAULT '',

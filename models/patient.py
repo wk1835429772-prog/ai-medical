@@ -13,8 +13,9 @@ def create(data: dict) -> dict:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(
         """INSERT INTO patients (id, name_abbr, age, gender, admission_date,
-           primary_diagnosis, surgery_type, surgery_date, is_critical, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           primary_diagnosis, surgery_type, surgery_date, is_critical, notes,
+           bed_number, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             patient_id,
             data.get("name_abbr", ""),
@@ -26,6 +27,7 @@ def create(data: dict) -> dict:
             data.get("surgery_date") or None,
             data.get("is_critical", 0),
             data.get("notes", ""),
+            data.get("bed_number", ""),
             now,
             now,
         ),
@@ -66,7 +68,7 @@ def update(patient_id: str, data: dict) -> dict | None:
     fields = []
     values = []
     for key in ["name_abbr", "age", "gender", "admission_date", "primary_diagnosis",
-                "surgery_type", "surgery_date", "is_critical", "notes"]:
+                "surgery_type", "surgery_date", "is_critical", "notes", "bed_number"]:
         if key in data:
             fields.append(f"{key} = ?")
             values.append(data[key])
