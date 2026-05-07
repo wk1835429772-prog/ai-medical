@@ -456,8 +456,8 @@ def import_all_json(json_str: str):
 # ─── 默认规则种子 ───
 def _seed_default_rules():
     conn = get_connection()
-    count = conn.execute("SELECT COUNT(*) FROM rules").fetchone()
-    cnt = count[0] if count else 0
+    row = conn.execute("SELECT COUNT(*) FROM rules").fetchone()
+    cnt = list(row)[0] if row else 0
     if cnt > 0:
         conn.close()
         return
