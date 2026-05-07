@@ -96,7 +96,8 @@ def _get_sqlite_connection():
 
 def _get_pg_connection():
     try:
-        import pg8000
+        import pg8000.dbapi
+        import ssl
     except ImportError:
         raise ImportError("PostgreSQL 后端需要 pg8000：pip install pg8000")
     url_str = _get_supabase_url()
@@ -106,9 +107,13 @@ def _get_pg_connection():
     host = parsed.hostname or "localhost"
     port = parsed.port or 5432
     database = parsed.path.lstrip("/") if parsed.path else "postgres"
-    conn = pg8000.Connection(
+    # Supabase 强制要求 SSL
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    conn = pg8000.dbapi.connect(
         user=user, password=password, host=host, port=port,
-        database=database, tls=True, timeout=30,
+        database=database, ssl_context=ssl_ctx, timeout=30,
     )
     return PgConnection(conn)
 
