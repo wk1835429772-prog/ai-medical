@@ -105,11 +105,14 @@ function getAbnormalFlags(patients: any[], cardMap: any): string {
 // ─── MCP 工具定义 ───
 const ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const TOOLS = [
-  { ...ANNOTATIONS, name: "get_patient_list", description: "列出所有管床患者（床号、姓名、诊断、术后天数）" },
+  { ...ANNOTATIONS, name: "get_patient_list", description: "列出所有管床患者（床号、姓名、诊断、术后天数）",
+    inputSchema: { type: "object", properties: {} } },
   { ...ANNOTATIONS, name: "get_rounds_by_bed", description: "返回指定床号患者的完整查房汇报",
     inputSchema: { type: "object", properties: { bed: { type: "string", description: "床号" } }, required: ["bed"] } },
-  { ...ANNOTATIONS, name: "get_rounds_all", description: "返回所有患者的查房汇报" },
-  { ...ANNOTATIONS, name: "get_abnormal_flags", description: "列出所有患者当前偏离正常范围的指标" },
+  { ...ANNOTATIONS, name: "get_rounds_all", description: "返回所有患者的查房汇报",
+    inputSchema: { type: "object", properties: {} } },
+  { ...ANNOTATIONS, name: "get_abnormal_flags", description: "列出所有患者当前偏离正常范围的指标",
+    inputSchema: { type: "object", properties: {} } },
 ];
 
 // ─── 入口 ───
