@@ -103,12 +103,13 @@ function getAbnormalFlags(patients: any[], cardMap: any): string {
 }
 
 // ─── MCP 工具定义 ───
+const ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const TOOLS = [
-  { name: "get_patient_list", description: "列出所有管床患者（床号、姓名、诊断、术后天数）" },
-  { name: "get_rounds_by_bed", description: "返回指定床号患者的完整查房汇报",
+  { ...ANNOTATIONS, name: "get_patient_list", description: "列出所有管床患者（床号、姓名、诊断、术后天数）" },
+  { ...ANNOTATIONS, name: "get_rounds_by_bed", description: "返回指定床号患者的完整查房汇报",
     inputSchema: { type: "object", properties: { bed: { type: "string", description: "床号" } }, required: ["bed"] } },
-  { name: "get_rounds_all", description: "返回所有患者的查房汇报" },
-  { name: "get_abnormal_flags", description: "列出所有患者当前偏离正常范围的指标" },
+  { ...ANNOTATIONS, name: "get_rounds_all", description: "返回所有患者的查房汇报" },
+  { ...ANNOTATIONS, name: "get_abnormal_flags", description: "列出所有患者当前偏离正常范围的指标" },
 ];
 
 // ─── 入口 ───
@@ -176,11 +177,13 @@ Deno.serve(async (req: Request) => {
     }
 
     if (method === "notifications/initialized") {
-      return new Response(null, { status: 202, headers: jsonHeaders });
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, result: {} }),
+        { headers: jsonHeaders });
     }
 
     if (method?.startsWith("notifications/")) {
-      return new Response(null, { status: 202, headers: jsonHeaders });
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, result: {} }),
+        { headers: jsonHeaders });
     }
 
     if (method === "ping") {
