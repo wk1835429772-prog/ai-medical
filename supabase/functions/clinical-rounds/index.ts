@@ -115,6 +115,16 @@ const TOOLS = [
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const apiKey = req.headers.get("x-api-key") || "";
+  const jsonHeaders = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "content-type, x-api-key",
+  };
+
+  // ─── CORS preflight ───
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: jsonHeaders });
+  }
 
   // ─── GET: MCP 服务器发现（不需要 auth） ───
   if (req.method === "GET") {
@@ -164,27 +174,27 @@ Deno.serve(async (req: Request) => {
 
     if (method === "notifications/initialized") {
       return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: {} }),
-        { headers: { "Content-Type": "application/json" } });
+        { headers: jsonHeaders });
     }
 
     if (method === "ping") {
       return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: {} }),
-        { headers: { "Content-Type": "application/json" } });
+        { headers: jsonHeaders });
     }
 
     if (method === "resources/list") {
       return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: { resources: [] } }),
-        { headers: { "Content-Type": "application/json" } });
+        { headers: jsonHeaders });
     }
 
     if (method === "prompts/list") {
       return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: { prompts: [] } }),
-        { headers: { "Content-Type": "application/json" } });
+        { headers: jsonHeaders });
     }
 
     if (method === "tools/list") {
       return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: { tools: TOOLS } }),
-        { headers: { "Content-Type": "application/json" } });
+        { headers: jsonHeaders });
     }
 
     if (method === "tools/call") {
