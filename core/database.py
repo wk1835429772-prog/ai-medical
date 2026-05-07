@@ -25,33 +25,9 @@ USE_SUPABASE = bool(_get_supabase_url())
 
 # ─── PostgreSQL 兼容包装（pg8000 驱动） ───
 class PgConnection:
-    """包装 pg8000 连接，使行为与 sqlite3.Row 兼容（row["column"] 可用）"""
-
-    def __init__(self, conn):
-        self._conn = conn
-        self._cursor = conn.cursor()
-        self._description = None
-
-    def execute(self, sql, params=None):
-        # ? 占位符 → %s（PostgreSQL 格式）
-        pg_sql = sql.replace("?", "%s")
-        self._cursor.execute(pg_sql, params or ())
-        self._description = self._cursor.description
-        return self
-
-    def executescript(self, script):
-        """逐条执行 SQL 脚本"""
-        for stmt in script.split(";"):
-            stmt = stmt.strip()
-            if stmt:
-                self._cursor.execute(stmt)
-        return self
+    """包装 pg8000 连接，行为兼容 sqlite3.Row"""
 
     class _Row(dict):
-        """支持 row[0] 和 row['col'] 两种访问方式"""
-        def __init__(self, data, desc):
-            super().__init__(data)
-            self._desc = desc
         def __getitem__(self, key):
             if isinstance(key, int):
                 return list(self.values())[key]
@@ -59,26 +35,45 @@ class PgConnection:
         def __iter__(self):
             return iter(self.values())
 
-    def _row_to_dict(self, row):
-        if row is None or self._description is None:
+    @staticmethod
+    def _row_to_dict(row, description):
+        if row is None or description is None:
             return None
-        data = {self._description[i][0]: row[i] for i in range(len(row))}
-        return self._Row(data, self._description)
+        data = {description[i][0]: v for i, v in enumerate(row)}
+        return PgConnection._Row(data)
+
+    def __init__(self, conn):
+        self._conn = conn
+        self._cursor = None
+        self._desc = None
+
+    def execute(self, sql, params=None):
+        self._cursor = self._conn.cursor()
+        self._cursor.execute(sql.replace("?", "%s"), params or ())
+        self._desc = self._cursor.description
+        return self
+
+    def executescript(self, script):
+        for stmt in script.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                self._cursor = self._conn.cursor()
+                self._cursor.execute(stmt)
+        return self
 
     def fetchone(self):
-        row = self._cursor.fetchone()
-        return self._row_to_dict(row)
+        return self._row_to_dict(self._cursor.fetchone(), self._desc)
 
     def fetchall(self):
-        rows = self._cursor.fetchall()
-        return [self._row_to_dict(r) for r in rows]
+        return [self._row_to_dict(r, self._desc) for r in self._cursor.fetchall()]
 
     def commit(self):
         self._conn.commit()
 
     def close(self):
         try:
-            self._cursor.close()
+            if self._cursor:
+                self._cursor.close()
         except Exception:
             pass
         try:
