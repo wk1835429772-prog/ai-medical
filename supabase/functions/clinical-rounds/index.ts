@@ -172,7 +172,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         jsonrpc: "2.0", id,
         result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "clinical-rounds", version: "1.0" } },
-      }), { headers: { "Content-Type": "application/json" } });
+      }), { headers: jsonHeaders });
     }
 
     if (method === "notifications/initialized") {
@@ -212,11 +212,11 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         jsonrpc: "2.0", id,
         result: { content: [{ type: "text", text }] },
-      }), { headers: { "Content-Type": "application/json" } });
+      }), { headers: jsonHeaders });
     }
 
     return new Response(JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32601, message: `Unknown: ${method}` } }),
-      { headers: { "Content-Type": "application/json" } });
+      { headers: jsonHeaders });
   }
 
   return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32000, message: "Use POST with JSON-RPC" } }), { headers: jsonHeaders });
