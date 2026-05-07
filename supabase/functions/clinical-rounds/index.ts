@@ -176,8 +176,11 @@ Deno.serve(async (req: Request) => {
     }
 
     if (method === "notifications/initialized") {
-      return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: {} }),
-        { headers: jsonHeaders });
+      return new Response(null, { status: 202, headers: jsonHeaders });
+    }
+
+    if (method?.startsWith("notifications/")) {
+      return new Response(null, { status: 202, headers: jsonHeaders });
     }
 
     if (method === "ping") {
@@ -215,7 +218,7 @@ Deno.serve(async (req: Request) => {
       }), { headers: jsonHeaders });
     }
 
-    return new Response(JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32601, message: `Unknown: ${method}` } }),
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, error: { code: -32601, message: `Unknown: ${method}` } }),
       { headers: jsonHeaders });
   }
 
