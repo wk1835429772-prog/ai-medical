@@ -131,6 +131,18 @@ Deno.serve(async (req: Request) => {
     const { method, id, params } = body;
     const { patients, cardMap } = await getData(supabase);
 
+    if (method === "initialize") {
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0", id,
+        result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "clinical-rounds", version: "1.0" } },
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+
+    if (method === "notifications/initialized") {
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: {} }),
+        { headers: { "Content-Type": "application/json" } });
+    }
+
     if (method === "tools/list") {
       return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: { tools: TOOLS } }),
         { headers: { "Content-Type": "application/json" } });
