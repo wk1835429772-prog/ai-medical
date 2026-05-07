@@ -149,12 +149,13 @@ Deno.serve(async (req: Request) => {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
       serverInfo: { name: "clinical-rounds", version: "1.0" },
-    }), { headers: { "Content-Type": "application/json" } });
+    }), { headers: jsonHeaders });
   }
 
   // ─── POST: MCP JSON-RPC ───
   if (apiKey !== ANON_KEY) {
-    return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized: add x-api-key header" } }), { status: 401,
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "Unauthorized: add x-api-key header" } }), { status: 401,
+      headers: jsonHeaders });
       headers: { "Content-Type": "application/json" } });
   }
 
@@ -219,5 +220,5 @@ Deno.serve(async (req: Request) => {
       { headers: { "Content-Type": "application/json" } });
   }
 
-  return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Use POST with JSON-RPC" } }), { headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32000, message: "Use POST with JSON-RPC" } }), { headers: jsonHeaders });
 });
